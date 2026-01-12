@@ -40,6 +40,8 @@
     .toggle{display:inline-flex;align-items:center;gap:0.5rem;padding:.4rem .6rem;border-radius:8px;border:1px solid #e6eef6;background:var(--glass)}
     audio{width:100%}
     .hint{font-size:0.82rem;color:var(--muted)}
+    select{padding:.45rem;border-radius:8px;border:1px solid #e6eef6;background:#fff}
+    .device-row{display:flex;gap:.5rem;align-items:center}
   </style>
 </head>
 <body>
@@ -90,6 +92,18 @@
       </div>
 
       <div class="call-card">
+        <div class="small">Device selection</div>
+        <div class="device-row" style="margin-top:.35rem">
+          <label class="small" for="inputSelect">Mic</label>
+          <select id="inputSelect"></select>
+        </div>
+        <div class="device-row" style="margin-top:.35rem">
+          <label class="small" for="outputSelect">Speaker</label>
+          <select id="outputSelect"></select>
+        </div>
+
+        <div style="height:8px"></div>
+
         <div class="small">Voice calls (peer-to-peer)</div>
 
         <div style="display:flex;gap:.5rem">
@@ -145,7 +159,7 @@
     } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
 
     // ========================
-    // CONFIG — replace with your project's config if different
+    // CONFIG — keep your project's config
     const firebaseConfig = {
       apiKey: "AIzaSyD2Q2TDCQDVcmmhR7zzVVTMtBkaS40cOx0",
       authDomain: "talk-a-lot-5aad8.firebaseapp.com",
@@ -175,6 +189,10 @@
     const onlineCount = document.getElementById('onlineCount');
     const debugBox = document.getElementById('debugBox');
 
+    // Device UI
+    const inputSelect = document.getElementById('inputSelect');
+    const outputSelect = document.getElementById('outputSelect');
+
     // Call UI
     const createCallBtn = document.getElementById('createCallBtn');
     const joinCallBtn = document.getElementById('joinCallBtn');
@@ -190,14 +208,15 @@
     displayNameInput.value = displayName;
     displayNameLabel.textContent = displayName || '(anonymous)';
 
+    // Device selection state
+    const SAVE_KEYS = { input: 'talkalot_inputDevice', output: 'talkalot_outputDevice' };
+
     // Chat setup
     const messagesCol = collection(db, 'chat_messages');
     const recentQuery = query(messagesCol, orderBy('createdAt', 'asc'), limit(500));
-    let unsubscribeMessages = null;
 
     // Presence & typing
     const presenceCol = collection(db, 'presence'); // doc per uid
-    let presenceUnsub = null;
     const TYPING_TIMEOUT = 1500;
     let typingTimer = null;
 
@@ -260,7 +279,7 @@
     }
 
     // Messages listener
-    unsubscribeMessages = onSnapshot(recentQuery, snapshot => {
+    onSnapshot(recentQuery, snapshot => {
       messagesEl.innerHTML = '';
       const docs = [];
       snapshot.forEach(docSnap => docs.push(docSnap.data()));
@@ -297,18 +316,11 @@
     sendBtn.addEventListener('click', sendMessage);
     messageInput.addEventListener('keydown', e => {
       if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); }
-      // typing indicator
       notifyTyping();
     });
     messageInput.addEventListener('input', notifyTyping);
 
     // Typing indicator: write typing state to presence doc for this user
-    function notifyTyping(){
-      if(!currentUser) return;
-      setTyping(true);
-      clearTimeout(typingTimer);
-      typingTimer = setTimeout(()=>setTyping(false), TYPING_TIMEOUT);
-    }
     async function setTyping(val){
       if(!currentUser) return;
       try {
@@ -316,10 +328,15 @@
         await setDoc(pDoc, { uid: currentUser.uid, displayName: displayName || null, typing: val, lastSeen: serverTimestamp() }, { merge: true });
       } catch(e){ console.warn('typing set failed', e); }
     }
+    function notifyTyping(){
+      if(!currentUser) return;
+      setTyping(true);
+      clearTimeout(typingTimer);
+      typingTimer = setTimeout(()=>setTyping(false), TYPING_TIMEOUT);
+    }
 
     // Presence: watch presence collection to show count and typing
-    const presenceQuery = collection(db, 'presence');
-    presenceUnsub = onSnapshot(presenceQuery, snapshot => {
+    onSnapshot(collection(db,'presence'), snapshot => {
       let online = 0;
       const typers = [];
       snapshot.forEach(d => {
@@ -347,7 +364,6 @@
       displayName = displayNameInput.value.trim().slice(0,40);
       localStorage.setItem('talkalot_displayName', displayName);
       displayNameLabel.textContent = displayName || '(anonymous)';
-      // update presence
       if(currentUser) setDoc(doc(db, 'presence', currentUser.uid), { uid: currentUser.uid, displayName, lastSeen: serverTimestamp() }, { merge:true });
     });
 
@@ -359,11 +375,8 @@
         anonBtn.style.display = 'none';
         signOutBtn.style.display = 'inline-block';
         uidLabel.textContent = `uid: ${shortUid(user.uid)}`;
-        // create presence doc
         setDoc(doc(db, 'presence', user.uid), { uid: user.uid, displayName, typing: false, lastSeen: serverTimestamp() }, { merge: true });
-        // remove presence on unload
         window.addEventListener('beforeunload', () => {
-          // best effort: mark offline
           setDoc(doc(db, 'presence', user.uid), { lastSeen: serverTimestamp(), online:false }, { merge:true });
         });
       } else {
@@ -376,14 +389,139 @@
     });
 
     // -----------------------
-    // WebRTC voice calling (simple Firestore signaling)
-    // WARNING: demo only. For production use TURN servers and auth'd signaling.
+    // Device selection & management
     // -----------------------
+    async function enumerateAndPopulateDevices() {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const inputs = devices.filter(d => d.kind === 'audioinput');
+        const outputs = devices.filter(d => d.kind === 'audiooutput');
 
-    // STUN-only configuration (public Google STUN). Add TURN for production.
+        const savedIn = localStorage.getItem(SAVE_KEYS.input) || '';
+        const savedOut = localStorage.getItem(SAVE_KEYS.output) || '';
+
+        // helper to set options
+        function fill(selectEl, list, saved, kindLabel) {
+          const prev = selectEl.value;
+          selectEl.innerHTML = '';
+          const noneOpt = document.createElement('option');
+          noneOpt.value = '';
+          noneOpt.textContent = `Default ${kindLabel}`;
+          selectEl.appendChild(noneOpt);
+          list.forEach(d=>{
+            const option = document.createElement('option');
+            option.value = d.deviceId;
+            // device labels may be empty until permission granted
+            option.textContent = d.label || `${kindLabel} ${selectEl.length}`;
+            selectEl.appendChild(option);
+          });
+          if(saved) selectEl.value = saved;
+          else if(prev) selectEl.value = prev;
+        }
+
+        fill(inputSelect, inputs, savedIn, 'Mic');
+        fill(outputSelect, outputs, savedOut, 'Speaker');
+
+        // if output saved set sink now
+        const outId = outputSelect.value;
+        if(outId) await applyOutputDevice(outId);
+      } catch (e) {
+        console.warn('enumerateDevices failed', e);
+      }
+    }
+
+    // apply chosen output device to remoteAudio
+    async function applyOutputDevice(deviceId) {
+      if(!remoteAudio) return;
+      if(typeof remoteAudio.setSinkId !== 'function') {
+        logDebug('setSinkId not supported in this browser');
+        return;
+      }
+      try {
+        await remoteAudio.setSinkId(deviceId || '');
+        localStorage.setItem(SAVE_KEYS.output, deviceId || '');
+        logDebug('Output set to', deviceId || 'default');
+      } catch (e) {
+        console.warn('setSinkId failed', e);
+        logDebug('setSinkId failed: ' + (e.message || e));
+      }
+    }
+
+    // start or restart local audio with selected device
+    async function startLocalAudio() {
+      const selectedInput = inputSelect.value || localStorage.getItem(SAVE_KEYS.input) || '';
+      // build constraints
+      const audioConstraints = selectedInput ? { deviceId: { exact: selectedInput } } : true;
+      try {
+        const newStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+        // stop previous tracks
+        if(localStream) {
+          localStream.getTracks().forEach(t => t.stop());
+        }
+        localStream = newStream;
+        // if in a call and pc exists, replace audio track(s)
+        if(pc) {
+          const senders = pc.getSenders ? pc.getSenders() : [];
+          const newTrack = localStream.getAudioTracks()[0];
+          for(const sender of senders){
+            if(sender.track && sender.track.kind === 'audio') {
+              try { await sender.replaceTrack(newTrack); } catch(e){ console.warn('replaceTrack failed', e); }
+            }
+          }
+        }
+        // remember selected input
+        localStorage.setItem(SAVE_KEYS.input, selectedInput || '');
+        logDebug('Local audio started (device)', selectedInput || 'default');
+        return localStream;
+      } catch (e) {
+        console.error('startLocalAudio failed', e);
+        logDebug('startLocalAudio failed: ' + (e.message || e));
+        throw e;
+      }
+    }
+
+    // respond to select changes
+    inputSelect.addEventListener('change', async () => {
+      const id = inputSelect.value || '';
+      localStorage.setItem(SAVE_KEYS.input, id);
+      // restart local audio (and replace track in active pc if any)
+      try { await startLocalAudio(); } catch(e){ console.warn(e); }
+    });
+    outputSelect.addEventListener('change', async () => {
+      const id = outputSelect.value || '';
+      localStorage.setItem(SAVE_KEYS.output, id);
+      await applyOutputDevice(id);
+    });
+
+    // update device lists when devices change (plug/unplug)
+    navigator.mediaDevices.addEventListener?.('devicechange', enumerateAndPopulateDevices);
+
+    // initialize devices: try to get permission to get labels if not present
+    async function initDevices() {
+      try {
+        // If labels are empty, prompt for permission briefly to allow proper labels. Only do if necessary.
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const needPerm = devices.some(d => (d.kind === 'audioinput') && !d.label);
+        if(needPerm) {
+          try {
+            const tmpStream = await navigator.mediaDevices.getUserMedia({ audio:true });
+            tmpStream.getTracks().forEach(t => t.stop());
+          } catch (_) {
+            // user denied or not available — we'll still list devices, labels may be empty
+          }
+        }
+      } catch (e) {
+        console.warn('initDevices enumerate failed', e);
+      } finally {
+        await enumerateAndPopulateDevices();
+      }
+    }
+
+    // -----------------------
+    // WebRTC voice calling (simple Firestore signaling)
+    // -----------------------
     const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
-    // Create a new call (caller) — FIXED: don't create invalid collection paths
     createCallBtn.addEventListener('click', async () => {
       if(!currentUser){ alert('Sign in first'); return; }
       createCallBtn.disabled = true;
@@ -401,7 +539,7 @@
           remoteAudio.srcObject = event.streams[0];
         };
 
-        // create call doc reference (auto-id) and candidate subcollections
+        // create call doc reference and subcollections AFTER pc exists
         const callRef = doc(collection(db, 'calls'));
         callDocRef = callRef;
         callerCandidatesCol = collection(callRef, 'callerCandidates');
@@ -424,6 +562,10 @@
           createdBy: currentUser.uid,
           createdAt: serverTimestamp()
         });
+
+        // apply output device if previously selected
+        const savedOutput = localStorage.getItem(SAVE_KEYS.output) || outputSelect.value || '';
+        if(savedOutput) await applyOutputDevice(savedOutput);
 
         // listen for answer on call doc
         onSnapshot(callRef, async snap => {
@@ -461,7 +603,6 @@
       }
     });
 
-    // Join an existing call (callee)
     joinCallBtn.addEventListener('click', async () => {
       const callId = callInput.value.trim();
       if(!callId){ alert('Enter call ID to join'); return; }
@@ -489,7 +630,6 @@
           }
         };
 
-        // setup candidate subcollections
         callerCandidatesCol = collection(callRef, 'callerCandidates');
         calleeCandidatesCol = collection(callRef, 'calleeCandidates');
 
@@ -511,6 +651,10 @@
             }
           });
         });
+
+        // set output device if saved
+        const savedOutput = localStorage.getItem(SAVE_KEYS.output) || outputSelect.value || '';
+        if(savedOutput) await applyOutputDevice(savedOutput);
 
         hangupBtn.style.display = 'inline-block';
         createCallBtn.style.display = 'none';
@@ -549,26 +693,24 @@
       } catch(e){ console.warn('hangup error', e); }
     });
 
-    // Helper: get local audio
-    async function startLocalAudio(){
-      if(localStream) return;
-      try {
-        localStream = await navigator.mediaDevices.getUserMedia({ audio:true });
-        localStream.getAudioTracks().forEach(t => t.enabled = localAudioEnabled);
-      } catch (e) {
-        logDebug('getUserMedia failed', e.message || e);
-        throw e;
-      }
-    }
-
     // Shortcuts: pressing Enter in callInput joins
     callInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); joinCallBtn.click(); } });
 
-    // Debug info
-    logDebug('Client ready — project:', firebaseConfig.projectId);
+    // initialize device lists & try to get labels
+    initDevices().catch(()=>{ /* ignore */ });
 
-    // Accessibility: focus message input
-    messageInput.focus();
+    // Apply saved output (if any) on load
+    (async () => {
+      const savedOutput = localStorage.getItem(SAVE_KEYS.output) || '';
+      if(savedOutput) {
+        // if setSinkId not supported, log only
+        if(typeof remoteAudio.setSinkId === 'function') {
+          try { await remoteAudio.setSinkId(savedOutput); } catch(e){ console.warn('setSinkId initial failed', e); }
+        }
+      }
+      logDebug('Client ready — project:', firebaseConfig.projectId);
+      messageInput.focus();
+    })();
 
     // End of module
   </script>
