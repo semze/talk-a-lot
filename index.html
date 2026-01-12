@@ -1,42 +1,130 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>GitHub Pages Voice Chat (Firebase signaling)</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Talk-a-lot — Demo</title>
   <style>
-    body { font-family: Arial, Helvetica, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 16px; }
-    #controls { margin-bottom: 12px; }
-    #peers { margin-top: 12px; }
-    .peer { margin: 6px 0; }
-    audio { display: block; margin-top: 6px; }
-    button { margin-left: 6px; }
-    #log { white-space: pre-wrap; background:#f7f7f7; padding:8px; border-radius:6px; max-height:200px; overflow:auto; }
+    /* Minimal embedded styles so this is one file */
+    :root { --bg:#f6f8fa; --card:#fff; --muted:#666; --accent:#0366d6; }
+    body{font-family:system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;margin:0;padding:2rem;background:var(--bg);color:#111}
+    main{max-width:900px;margin:0 auto;background:var(--card);padding:1.5rem;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
+    h1{margin:.25rem 0}
+    section{margin-top:1rem}
+    button{padding:.5rem .8rem;border-radius:6px;border:1px solid #ccc;background:#fff;cursor:pointer}
+    button:hover{background:#f0f0f0}
+    footer{margin-top:1.25rem;font-size:.9rem;color:var(--muted)}
+    code{background:#f3f4f6;padding:.15rem .3rem;border-radius:4px;font-size:.92em}
+    .row{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
   </style>
 </head>
 <body>
-  <h1>Voice Chat (Firebase signaling)</h1>
+  <main>
+    <h1>Talk-a-lot — Firebase Single-File Demo</h1>
+    <p id="status">Initializing Firebase...</p>
 
-  <div id="controls">
-    <input id="room" placeholder="room name (e.g. myroom)" />
-    <button id="joinBtn">Join</button>
-    <button id="leaveBtn" disabled>Leave</button>
-    <div id="status"></div>
-  </div>
+    <section>
+      <h2>Auth</h2>
+      <div class="row">
+        <button id="anonSignIn">Sign in anonymously</button>
+        <button id="signOut" style="display:none">Sign out</button>
+      </div>
+      <p id="userInfo">—</p>
+    </section>
 
-  <div id="peers">
-    <h3>Peers</h3>
-    <div id="peerList"></div>
-  </div>
+    <section>
+      <h2>Firestore test</h2>
+      <div class="row">
+        <button id="writeTest">Write test document</button>
+        <span id="writeResult" style="margin-left:.5rem;color:var(--muted)"></span>
+      </div>
+      <p style="margin-top:.5rem;color:var(--muted)">Writes go to collection <code>public_demo_logs</code>.</p>
+    </section>
 
-  <h3>Debug log</h3>
-  <div id="log"></div>
+    <footer>
+      <p>This is a single-file static demo. To publish: place this file in a <code>docs/</code> folder, push to main, and enable GitHub Pages (main /docs).</p>
+      <p style="color:var(--muted)">Note: this embeds client-side Firebase config (safe for web API keys). Do not embed admin/service-account secrets in client code.</p>
+    </footer>
+  </main>
 
-  <!-- Firebase (compat) -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+  <script type="module">
+    // Firebase v9 modular via CDN
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
+    import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
 
-  <!-- client code -->
-  <script src="client.js"></script>
+    // === EMBEDDED FIREBASE CONFIG (from your paste) ===
+    const firebaseConfig = {
+      apiKey: "AIzaSyD2Q2TDCQDVcmmhR7zzVVTMtBkaS40cOx0",
+      authDomain: "talk-a-lot-5aad8.firebaseapp.com",
+      projectId: "talk-a-lot-5aad8",
+      storageBucket: "talk-a-lot-5aad8.firebasestorage.app",
+      messagingSenderId: "373420699612",
+      appId: "1:373420699612:web:11f4470e6e0097b6576919",
+      measurementId: "G-P0VNPFJ2HD"
+    };
+    // ====================================================
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    // UI
+    const statusEl = document.getElementById('status');
+    const userInfoEl = document.getElementById('userInfo');
+    const anonBtn = document.getElementById('anonSignIn');
+    const signOutBtn = document.getElementById('signOut');
+    const writeBtn = document.getElementById('writeTest');
+    const writeResult = document.getElementById('writeResult');
+
+    statusEl.textContent = 'Firebase initialized for project: ' + (firebaseConfig.projectId || '(unknown)');
+
+    anonBtn.addEventListener('click', async () => {
+      anonBtn.disabled = true;
+      try {
+        await signInAnonymously(auth);
+      } catch (err) {
+        userInfoEl.textContent = 'Sign-in error: ' + err.message;
+      } finally { anonBtn.disabled = false; }
+    });
+
+    signOutBtn.addEventListener('click', async () => {
+      signOutBtn.disabled = true;
+      try { await signOut(auth); } catch (err) { userInfoEl.textContent = 'Sign-out error: ' + err.message; }
+      signOutBtn.disabled = false;
+    });
+
+    onAuthStateChanged(auth, user => {
+      if (user) {
+        userInfoEl.textContent = `Signed in — uid=${user.uid} (isAnonymous=${user.isAnonymous})`;
+        anonBtn.style.display = 'none';
+        signOutBtn.style.display = 'inline-block';
+      } else {
+        userInfoEl.textContent = 'Not signed in';
+        anonBtn.style.display = 'inline-block';
+        signOutBtn.style.display = 'none';
+      }
+    });
+
+    writeBtn.addEventListener('click', async () => {
+      writeResult.textContent = 'Writing…';
+      writeBtn.disabled = true;
+      try {
+        const ref = await addDoc(collection(db, 'public_demo_logs'), {
+          message: 'Hello from GitHub Pages demo',
+          createdAt: serverTimestamp()
+        });
+        writeResult.textContent = `Wrote: ${ref.id}`;
+      } catch (err) {
+        writeResult.textContent = 'Write failed: ' + err.message;
+      } finally {
+        writeBtn.disabled = false;
+      }
+    });
+
+    // quick console helper
+    console.log('Firebase initialized (client):', { projectId: firebaseConfig.projectId });
+  </script>
 </body>
 </html>
