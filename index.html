@@ -3,70 +3,79 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Talk-a-lot — Firebase Single-File Demo (RTDB included)</title>
+  <title>Talk-a-lot — Live Chat</title>
   <style>
-    :root { --bg:#f6f8fa; --card:#fff; --muted:#666; --accent:#0366d6; }
-    body{font-family:system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;margin:0;padding:2rem;background:var(--bg);color:#111}
-    main{max-width:900px;margin:0 auto;background:var(--card);padding:1.5rem;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
-    h1{margin:.25rem 0}
-    section{margin-top:1rem}
+    :root { --bg:#f6f8fa; --card:#fff; --muted:#666; --accent:#0366d6; --me:#e6f0ff; }
+    body{font-family:system-ui, -apple-system, "Segoe UI", Roboto, Arial;margin:0;padding:1.25rem;background:var(--bg);color:#111}
+    .app{max-width:900px;margin:0 auto;background:var(--card);padding:1rem;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
+    header{display:flex;justify-content:space-between;align-items:center;gap:1rem}
+    h1{font-size:1.25rem;margin:.25rem 0}
+    .status{color:var(--muted);font-size:.9rem}
+    .chat{display:flex;flex-direction:column;height:65vh;gap:.75rem;margin-top:1rem}
+    .messages{flex:1;overflow:auto;padding:.5rem;border:1px solid #ececec;border-radius:6px;background:#fff}
+    .message{padding:.45rem .6rem;border-radius:6px;margin-bottom:.4rem;max-width:80%;word-wrap:break-word}
+    .meta{font-size:.78rem;color:var(--muted);margin-bottom:.25rem}
+    .me{margin-left:auto;background:var(--me);}
+    .other{background:#f7f7fb}
+    .inputRow{display:flex;gap:.5rem;margin-top:.5rem;align-items:center}
+    input[type="text"], textarea{padding:.5rem;border:1px solid #ddd;border-radius:6px;font-size:1rem}
+    textarea{flex:1;min-height:48px;resize:vertical}
     button{padding:.5rem .8rem;border-radius:6px;border:1px solid #ccc;background:#fff;cursor:pointer}
     button:hover{background:#f0f0f0}
-    footer{margin-top:1.25rem;font-size:.9rem;color:var(--muted)}
-    code{background:#f3f4f6;padding:.15rem .3rem;border-radius:4px;font-size:.92em}
-    .row{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
-    pre{background:#f8f9fb;padding:.6rem;border-radius:6px;overflow:auto}
+    .small{font-size:.9rem;color:var(--muted)}
   </style>
 </head>
 <body>
-  <main>
-    <h1>Talk-a-lot — Firebase Single-File Demo (RTDB included)</h1>
-    <p id="status">Initializing Firebase...</p>
+  <div class="app">
+    <header>
+      <div>
+        <h1>Talk-a-lot — Live Chat</h1>
+        <div class="status" id="status">Initializing...</div>
+      </div>
+      <div>
+        <div class="small">Signed in as <span id="displayNameLabel">—</span></div>
+      </div>
+    </header>
 
-    <section>
-      <h2>Auth</h2>
-      <div class="row">
-        <button id="anonSignIn">Sign in anonymously</button>
+    <div class="chat">
+      <div class="messages" id="messages" aria-live="polite"></div>
+
+      <div style="display:flex;gap:.5rem;align-items:center;margin-top:.5rem;">
+        <input id="displayName" type="text" placeholder="Display name (optional)" style="width:220px" />
+        <div style="flex:1"></div>
         <button id="signOut" style="display:none">Sign out</button>
+        <button id="anonSignIn">Sign in anonymously</button>
       </div>
-      <p id="userInfo">—</p>
-    </section>
 
-    <section>
-      <h2>Firestore test</h2>
-      <div class="row">
-        <button id="writeTest">Write test document (Firestore)</button>
-        <span id="writeResult" style="margin-left:.5rem;color:var(--muted)"></span>
+      <div class="inputRow">
+        <textarea id="messageInput" placeholder="Type a message (press Enter to send)"></textarea>
+        <button id="sendBtn">Send</button>
       </div>
-      <p style="margin-top:.5rem;color:var(--muted)">Writes go to collection <code>public_demo_logs</code>.</p>
-    </section>
 
-    <section>
-      <h2>Realtime Database test</h2>
-      <div class="row">
-        <button id="rdbWrite">Write to RTDB</button>
-        <button id="rdbRead">Read latest RTDB</button>
-        <span id="rdbResult" style="margin-left:.5rem;color:var(--muted)"></span>
-      </div>
-      <pre id="rdbOutput" style="margin-top:.5rem;max-height:160px"></pre>
-      <p style="margin-top:.5rem;color:var(--muted)">RTDB path used: <code>/public_demo_logs_rtdb</code></p>
-    </section>
-
-    <footer>
-      <p>This is a single-file static demo. Place this file in a <code>docs/</code> folder, push to main, and enable GitHub Pages (main /docs).</p>
-      <p style="color:var(--muted)">Note: This embeds client Firebase config (web API key). Do NOT embed admin/service-account secrets in client code.</p>
-    </footer>
-  </main>
+      <div class="small" style="margin-top:.5rem;color:var(--muted)">Messages are public to this Firestore collection: <code>chat_messages</code></div>
+    </div>
+  </div>
 
   <script type="module">
-    // Firebase v9 modular via CDN
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
-    import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
-    import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
-    import { getDatabase, ref as rdbRef, push as rdbPush, get as rdbGet, query as rdbQuery, limitToLast } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js";
+    import {
+      getAuth,
+      signInAnonymously,
+      onAuthStateChanged,
+      signOut
+    } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
+    import {
+      getFirestore,
+      collection,
+      addDoc,
+      serverTimestamp,
+      query,
+      orderBy,
+      limit,
+      onSnapshot
+    } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
 
-    // === EMBEDDED FIREBASE CONFIG (includes databaseURL) ===
-    // Use the Realtime Database URL from your Firebase console (Realtime Database panel).
+    // === EMBEDDED FIREBASE CONFIG (keep for your project) ===
     const firebaseConfig = {
       apiKey: "AIzaSyD2Q2TDCQDVcmmhR7zzVVTMtBkaS40cOx0",
       authDomain: "talk-a-lot-5aad8.firebaseapp.com",
@@ -74,112 +83,161 @@
       storageBucket: "talk-a-lot-5aad8.firebasestorage.app",
       messagingSenderId: "373420699612",
       appId: "1:373420699612:web:11f4470e6e0097b6576919",
-      measurementId: "G-P0VNPFJ2HD",
-      // Add the Realtime Database URL exactly as shown in the Firebase console:
-      databaseURL: "https://talk-a-lot-5aad8-default-rtdb.firebaseio.com"
+      measurementId: "G-P0VNPFJ2HD"
     };
-    // ====================================================
+    // ========================================================
 
-    // Initialize Firebase
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
-    // Use getDatabase(app) — because we provided databaseURL it will connect correctly
-    const rdb = getDatabase(app);
 
     // UI refs
     const statusEl = document.getElementById('status');
-    const userInfoEl = document.getElementById('userInfo');
+    const messagesEl = document.getElementById('messages');
+    const messageInput = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
     const anonBtn = document.getElementById('anonSignIn');
     const signOutBtn = document.getElementById('signOut');
-    const writeBtn = document.getElementById('writeTest');
-    const writeResult = document.getElementById('writeResult');
-    const rdbWriteBtn = document.getElementById('rdbWrite');
-    const rdbReadBtn = document.getElementById('rdbRead');
-    const rdbResult = document.getElementById('rdbResult');
-    const rdbOutput = document.getElementById('rdbOutput');
+    const displayNameInput = document.getElementById('displayName');
+    const displayNameLabel = document.getElementById('displayNameLabel');
 
-    statusEl.textContent = 'Firebase initialized for project: ' + (firebaseConfig.projectId || '(unknown)');
+    // Local state
+    let currentUser = null;
+    let displayName = localStorage.getItem('talkalot_displayName') || '';
+
+    displayNameInput.value = displayName;
+    displayNameLabel.textContent = displayName || '(anonymous)';
+
+    // Helpers
+    function escapeHTML(s) {
+      // simple escape
+      return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c]));
+    }
+    function shortUid(uid) { return uid ? uid.slice(0,6) : '(no-uid)'; }
+    function scrollToBottom() { messagesEl.scrollTop = messagesEl.scrollHeight; }
 
     // Auth handlers
     anonBtn.addEventListener('click', async () => {
       anonBtn.disabled = true;
       try { await signInAnonymously(auth); }
-      catch (err) { userInfoEl.textContent = 'Sign-in error: ' + err.message; }
+      catch (err) { statusEl.textContent = 'Sign-in error: ' + (err.message || err); console.error(err); }
       finally { anonBtn.disabled = false; }
     });
+
     signOutBtn.addEventListener('click', async () => {
       signOutBtn.disabled = true;
-      try { await signOut(auth); } catch (err) { userInfoEl.textContent = 'Sign-out error: ' + err.message; }
-      signOutBtn.disabled = false;
+      try { await signOut(auth); }
+      catch (err) { console.error(err); statusEl.textContent = 'Sign-out error: ' + err.message; }
+      finally { signOutBtn.disabled = false; }
     });
+
+    displayNameInput.addEventListener('change', () => {
+      displayName = displayNameInput.value.trim().slice(0,40);
+      localStorage.setItem('talkalot_displayName', displayName);
+      displayNameLabel.textContent = displayName || '(anonymous)';
+    });
+
     onAuthStateChanged(auth, user => {
+      currentUser = user;
       if (user) {
-        userInfoEl.textContent = `Signed in — uid=${user.uid} (isAnonymous=${user.isAnonymous})`;
+        statusEl.textContent = 'Signed in ' + (user.isAnonymous ? '(anonymous)' : '');
         anonBtn.style.display = 'none';
         signOutBtn.style.display = 'inline-block';
       } else {
-        userInfoEl.textContent = 'Not signed in';
+        statusEl.textContent = 'Not signed in';
         anonBtn.style.display = 'inline-block';
         signOutBtn.style.display = 'none';
       }
+      displayNameLabel.textContent = displayName || (user ? shortUid(user.uid) : '(anonymous)');
     });
 
-    // Firestore test
-    writeBtn.addEventListener('click', async () => {
-      writeResult.textContent = 'Writing…';
-      writeBtn.disabled = true;
+    // Chat: realtime listener
+    const messagesCol = collection(db, 'chat_messages');
+    const recentQuery = query(messagesCol, orderBy('createdAt', 'asc'), limit(1000)); // keep ascending order
+    let unsubscribe = null;
+
+    function renderMessage(msg) {
+      const el = document.createElement('div');
+      el.className = 'message ' + (msg.uid === (currentUser && currentUser.uid) ? 'me' : 'other');
+
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      const name = escapeHTML(msg.displayName || shortUid(msg.uid));
+      const time = msg.createdAt && msg.createdAt.toDate ? msg.createdAt.toDate().toLocaleTimeString() : '';
+      meta.innerHTML = `<strong>${name}</strong> <span style="color:var(--muted);margin-left:.4rem">${time}</span>`;
+
+      const text = document.createElement('div');
+      text.innerHTML = escapeHTML(msg.text);
+
+      el.appendChild(meta);
+      el.appendChild(text);
+      return el;
+    }
+
+    // attach listener
+    unsubscribe = onSnapshot(recentQuery, snapshot => {
+      messagesEl.innerHTML = '';
+      const docs = [];
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        docs.push(data);
+      });
+      // docs already ordered asc by createdAt
+      for (const d of docs) {
+        const node = renderMessage(d);
+        messagesEl.appendChild(node);
+      }
+      scrollToBottom();
+    }, err => {
+      console.error('Listener error', err);
+      statusEl.textContent = 'Listener error: ' + (err.message || err);
+    });
+
+    // Send message
+    async function sendMessage() {
+      const text = messageInput.value.trim();
+      if (!text) return;
+      if (!currentUser) {
+        statusEl.textContent = 'You must sign in to send messages';
+        return;
+      }
+      // limit length
+      if (text.length > 1000) {
+        statusEl.textContent = 'Message too long (max 1000 chars)';
+        return;
+      }
+      sendBtn.disabled = true;
       try {
-        const ref = await addDoc(collection(db, 'public_demo_logs'), {
-          message: 'Hello from GitHub Pages demo (Firestore)',
+        await addDoc(messagesCol, {
+          uid: currentUser.uid,
+          displayName: displayName || null,
+          text: text,
           createdAt: serverTimestamp()
         });
-        writeResult.textContent = `Wrote: ${ref.id}`;
+        messageInput.value = '';
+        statusEl.textContent = 'Message sent';
       } catch (err) {
-        writeResult.textContent = 'Write failed: ' + err.message + ' (check Firestore rules)';
-      } finally { writeBtn.disabled = false; }
+        console.error('Send error', err);
+        statusEl.textContent = 'Send failed: ' + (err.message || err);
+      } finally {
+        sendBtn.disabled = false;
+      }
+    }
+
+    sendBtn.addEventListener('click', sendMessage);
+    messageInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
     });
 
-    // RTDB write (push)
-    rdbWriteBtn.addEventListener('click', async () => {
-      rdbResult.textContent = 'Writing to RTDB���';
-      rdbWriteBtn.disabled = true;
-      try {
-        const nodeRef = rdbRef(rdb, 'public_demo_logs_rtdb');
-        const newRef = await rdbPush(nodeRef, {
-          message: 'Hello from GitHub Pages demo (RTDB)',
-          ts: Date.now()
-        });
-        rdbResult.textContent = `Pushed: ${newRef.key}`;
-      } catch (err) {
-        rdbResult.textContent = 'RTDB write failed: ' + err.message + ' (check RTDB rules & databaseURL)';
-      } finally { rdbWriteBtn.disabled = false; }
-    });
+    // initial UI state
+    statusEl.textContent = 'Ready. Sign in to start chatting.';
+    // focus input for convenience
+    messageInput.focus();
 
-    // RTDB read (get last item)
-    rdbReadBtn.addEventListener('click', async () => {
-      rdbOutput.textContent = '';
-      rdbResult.textContent = 'Reading…';
-      rdbReadBtn.disabled = true;
-      try {
-        const nodeRef = rdbRef(rdb, 'public_demo_logs_rtdb');
-        const q = rdbQuery(nodeRef, limitToLast(5));
-        const snap = await rdbGet(q);
-        if (snap.exists && typeof snap.forEach === 'function') {
-          const out = [];
-          snap.forEach(child => { out.push({ key: child.key, val: child.val() }); });
-          rdbOutput.textContent = JSON.stringify(out, null, 2);
-          rdbResult.textContent = `Read ${out.length} item(s)`;
-        } else {
-          rdbOutput.textContent = JSON.stringify(snap.val(), null, 2);
-          rdbResult.textContent = snap.exists() ? 'Read' : 'No data';
-        }
-      } catch (err) {
-        rdbResult.textContent = 'RTDB read failed: ' + err.message;
-      } finally { rdbReadBtn.disabled = false; }
-    });
-
-    console.log('Firebase initialized (client):', { projectId: firebaseConfig.projectId, databaseURL: firebaseConfig.databaseURL });
+    console.log('Chat ready (client) — project:', firebaseConfig.projectId);
   </script>
 </body>
 </html>
