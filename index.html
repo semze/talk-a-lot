@@ -3,60 +3,125 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Talk-a-lot — Live Chat</title>
+  <title>Talk-a-lot — Live Chat + Voice</title>
   <style>
-    :root { --bg:#f6f8fa; --card:#fff; --muted:#666; --accent:#0366d6; --me:#e6f0ff; }
-    body{font-family:system-ui, -apple-system, "Segoe UI", Roboto, Arial;margin:0;padding:1.25rem;background:var(--bg);color:#111}
-    .app{max-width:900px;margin:0 auto;background:var(--card);padding:1rem;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
-    header{display:flex;justify-content:space-between;align-items:center;gap:1rem}
-    h1{font-size:1.25rem;margin:.25rem 0}
-    .status{color:var(--muted);font-size:.9rem}
-    .chat{display:flex;flex-direction:column;height:65vh;gap:.75rem;margin-top:1rem}
-    .messages{flex:1;overflow:auto;padding:.5rem;border:1px solid #ececec;border-radius:6px;background:#fff}
-    .message{padding:.45rem .6rem;border-radius:6px;margin-bottom:.4rem;max-width:80%;word-wrap:break-word}
-    .meta{font-size:.78rem;color:var(--muted);margin-bottom:.25rem}
-    .me{margin-left:auto;background:var(--me);}
-    .other{background:#f7f7fb}
-    .inputRow{display:flex;gap:.5rem;margin-top:.5rem;align-items:center}
-    input[type="text"], textarea{padding:.5rem;border:1px solid #ddd;border-radius:6px;font-size:1rem}
-    textarea{flex:1;min-height:48px;resize:vertical}
-    button{padding:.5rem .8rem;border-radius:6px;border:1px solid #ccc;background:#fff;cursor:pointer}
-    button:hover{background:#f0f0f0}
-    .small{font-size:.9rem;color:var(--muted)}
+    :root{
+      --bg:#f6f8fa; --card:#fff; --muted:#6b7280; --accent:#0366d6; --me:#e6f0ff;
+      --glass: rgba(255,255,255,0.8);
+    }
+    *{box-sizing:border-box}
+    body{font-family:Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial; margin:0; padding:1.25rem; background:var(--bg); color:#0f172a}
+    .wrap{max-width:1100px; margin:0 auto; display:grid; gap:1rem; grid-template-columns: 1fr 360px;}
+    @media (max-width:980px){ .wrap{ grid-template-columns:1fr } }
+    .panel{background:var(--card); padding:1rem; border-radius:12px; box-shadow:0 8px 30px rgba(2,6,23,0.06); }
+    header{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:0.5rem}
+    h1{font-size:1.125rem;margin:0}
+    .status{color:var(--muted); font-size:0.9rem}
+    /* Chat column */
+    .chat{display:flex;flex-direction:column; height:75vh; gap:0.75rem}
+    .messages{flex:1; overflow:auto; padding:0.5rem; border-radius:8px; background:linear-gradient(180deg,#ffffff, #fbfdff); border:1px solid #eef2f7}
+    .msg-row{display:flex; gap:0.6rem; margin-bottom:0.55rem}
+    .avatar{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600}
+    .bubble{padding:0.5rem 0.7rem;border-radius:10px;max-width:78%; word-wrap:break-word;box-shadow:0 1px 0 rgba(0,0,0,0.02)}
+    .meta{font-size:0.78rem;color:var(--muted); margin-bottom:0.25rem}
+    .me { margin-left:auto; display:flex; gap:0.6rem; align-items:flex-end }
+    .me .bubble{background:var(--me)}
+    .other .bubble{background:#f7f8fb}
+    .inputRow{display:flex; gap:0.5rem; align-items:center}
+    textarea{flex:1; min-height:54px; padding:0.6rem; border-radius:8px; border:1px solid #e6eef6; resize:vertical; font-size:0.95rem}
+    input[type="text"]{padding:0.5rem;border-radius:8px;border:1px solid #e6eef6}
+    button{padding:0.55rem .8rem;border-radius:8px;border:1px solid #d6dbe6;background:#fff;cursor:pointer}
+    button.primary{background:var(--accent); color:#fff; border-color:transparent}
+    .small{font-size:0.88rem;color:var(--muted)}
+    /* Right column (controls/calls) */
+    .side-section{display:flex;flex-direction:column;gap:0.75rem}
+    .call-card{display:flex;flex-direction:column;gap:0.6rem}
+    .call-actions{display:flex;gap:0.5rem;align-items:center}
+    .toggle{display:inline-flex;align-items:center;gap:0.5rem;padding:.4rem .6rem;border-radius:8px;border:1px solid #e6eef6;background:var(--glass)}
+    audio{width:100%}
+    .hint{font-size:0.82rem;color:var(--muted)}
   </style>
 </head>
 <body>
-  <div class="app">
-    <header>
+  <div class="wrap">
+    <!-- Chat column -->
+    <div class="panel">
+      <header>
+        <div>
+          <h1>Talk-a-lot — Live Chat</h1>
+          <div class="status" id="status">Initializing…</div>
+        </div>
+        <div style="text-align:right">
+          <div class="small">Signed in as <strong id="displayNameLabel">—</strong></div>
+          <div class="small" id="uidLabel"></div>
+        </div>
+      </header>
+
+      <div class="chat">
+        <div class="messages" id="messages" aria-live="polite"></div>
+
+        <div style="display:flex;gap:.5rem;align-items:center;">
+          <input id="displayName" type="text" placeholder="Display name (optional)" style="width:240px" />
+          <div style="flex:1"></div>
+          <button id="signOut" style="display:none">Sign out</button>
+          <button id="anonSignIn">Sign in anonymously</button>
+        </div>
+
+        <div class="inputRow">
+          <textarea id="messageInput" placeholder="Type a message (press Enter to send)"></textarea>
+          <button id="sendBtn" class="primary">Send</button>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+          <div class="small">Messages are public in collection <code>chat_messages</code></div>
+          <div class="small" id="typingIndicator"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Side column: calls, presence, controls -->
+    <div class="panel side-section">
       <div>
-        <h1>Talk-a-lot — Live Chat</h1>
-        <div class="status" id="status">Initializing...</div>
+        <div class="small">Presence</div>
+        <div style="display:flex;gap:.6rem;align-items:center;margin-top:.4rem">
+          <div style="width:12px;height:12px;border-radius:50%;background:#10b981"></div>
+          <div class="hint" id="onlineCount">— online</div>
+        </div>
       </div>
+
+      <div class="call-card">
+        <div class="small">Voice calls (peer-to-peer)</div>
+
+        <div style="display:flex;gap:.5rem">
+          <button id="createCallBtn">Create Call</button>
+          <button id="hangupBtn" style="display:none">Hang up</button>
+        </div>
+
+        <div style="display:flex;gap:.5rem;margin-top:.4rem">
+          <input id="callInput" type="text" placeholder="Enter call ID to join" style="flex:1" />
+          <button id="joinCallBtn">Join</button>
+        </div>
+
+        <div style="display:flex;gap:.5rem;margin-top:.5rem;align-items:center">
+          <button id="muteBtn">Mute</button>
+          <div class="hint" id="callStatus">Not in call</div>
+        </div>
+
+        <div style="margin-top:.6rem">
+          <audio id="remoteAudio" autoplay playsinline></audio>
+          <div class="hint" style="margin-top:.4rem">NOTE: This demo uses a public STUN server only. For reliable calls behind NATs, add a TURN server (production).</div>
+        </div>
+      </div>
+
       <div>
-        <div class="small">Signed in as <span id="displayNameLabel">—</span></div>
+        <div class="small">Debug / Info</div>
+        <div class="hint" id="debugBox" style="margin-top:.4rem;white-space:pre-wrap;max-height:220px;overflow:auto"></div>
       </div>
-    </header>
-
-    <div class="chat">
-      <div class="messages" id="messages" aria-live="polite"></div>
-
-      <div style="display:flex;gap:.5rem;align-items:center;margin-top:.5rem;">
-        <input id="displayName" type="text" placeholder="Display name (optional)" style="width:220px" />
-        <div style="flex:1"></div>
-        <button id="signOut" style="display:none">Sign out</button>
-        <button id="anonSignIn">Sign in anonymously</button>
-      </div>
-
-      <div class="inputRow">
-        <textarea id="messageInput" placeholder="Type a message (press Enter to send)"></textarea>
-        <button id="sendBtn">Send</button>
-      </div>
-
-      <div class="small" style="margin-top:.5rem;color:var(--muted)">Messages are public to this Firestore collection: <code>chat_messages</code></div>
     </div>
   </div>
 
   <script type="module">
+    // Firebase + Firestore libs (modular) via CDN
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
     import {
       getAuth,
@@ -72,10 +137,19 @@
       query,
       orderBy,
       limit,
-      onSnapshot
+      onSnapshot,
+      doc,
+      setDoc,
+      getDoc,
+      updateDoc,
+      arrayUnion,
+      deleteDoc,
+      onSnapshot as onDocSnapshot,
+      writeBatch
     } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
 
-    // === EMBEDDED FIREBASE CONFIG (keep for your project) ===
+    // ========================
+    // CONFIG — replace with your project's config if different
     const firebaseConfig = {
       apiKey: "AIzaSyD2Q2TDCQDVcmmhR7zzVVTMtBkaS40cOx0",
       authDomain: "talk-a-lot-5aad8.firebaseapp.com",
@@ -85,7 +159,7 @@
       appId: "1:373420699612:web:11f4470e6e0097b6576919",
       measurementId: "G-P0VNPFJ2HD"
     };
-    // ========================================================
+    // ========================
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
@@ -100,144 +174,403 @@
     const signOutBtn = document.getElementById('signOut');
     const displayNameInput = document.getElementById('displayName');
     const displayNameLabel = document.getElementById('displayNameLabel');
+    const uidLabel = document.getElementById('uidLabel');
+    const typingIndicator = document.getElementById('typingIndicator');
+    const onlineCount = document.getElementById('onlineCount');
+    const debugBox = document.getElementById('debugBox');
+
+    // Call UI
+    const createCallBtn = document.getElementById('createCallBtn');
+    const joinCallBtn = document.getElementById('joinCallBtn');
+    const callInput = document.getElementById('callInput');
+    const hangupBtn = document.getElementById('hangupBtn');
+    const muteBtn = document.getElementById('muteBtn');
+    const callStatus = document.getElementById('callStatus');
+    const remoteAudio = document.getElementById('remoteAudio');
 
     // Local state
     let currentUser = null;
     let displayName = localStorage.getItem('talkalot_displayName') || '';
-
     displayNameInput.value = displayName;
     displayNameLabel.textContent = displayName || '(anonymous)';
 
-    // Helpers
-    function escapeHTML(s) {
-      // simple escape
-      return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c]));
-    }
-    function shortUid(uid) { return uid ? uid.slice(0,6) : '(no-uid)'; }
-    function scrollToBottom() { messagesEl.scrollTop = messagesEl.scrollHeight; }
-
-    // Auth handlers
-    anonBtn.addEventListener('click', async () => {
-      anonBtn.disabled = true;
-      try { await signInAnonymously(auth); }
-      catch (err) { statusEl.textContent = 'Sign-in error: ' + (err.message || err); console.error(err); }
-      finally { anonBtn.disabled = false; }
-    });
-
-    signOutBtn.addEventListener('click', async () => {
-      signOutBtn.disabled = true;
-      try { await signOut(auth); }
-      catch (err) { console.error(err); statusEl.textContent = 'Sign-out error: ' + err.message; }
-      finally { signOutBtn.disabled = false; }
-    });
-
-    displayNameInput.addEventListener('change', () => {
-      displayName = displayNameInput.value.trim().slice(0,40);
-      localStorage.setItem('talkalot_displayName', displayName);
-      displayNameLabel.textContent = displayName || '(anonymous)';
-    });
-
-    onAuthStateChanged(auth, user => {
-      currentUser = user;
-      if (user) {
-        statusEl.textContent = 'Signed in ' + (user.isAnonymous ? '(anonymous)' : '');
-        anonBtn.style.display = 'none';
-        signOutBtn.style.display = 'inline-block';
-      } else {
-        statusEl.textContent = 'Not signed in';
-        anonBtn.style.display = 'inline-block';
-        signOutBtn.style.display = 'none';
-      }
-      displayNameLabel.textContent = displayName || (user ? shortUid(user.uid) : '(anonymous)');
-    });
-
-    // Chat: realtime listener
+    // Chat setup
     const messagesCol = collection(db, 'chat_messages');
-    const recentQuery = query(messagesCol, orderBy('createdAt', 'asc'), limit(1000)); // keep ascending order
-    let unsubscribe = null;
+    const recentQuery = query(messagesCol, orderBy('createdAt', 'asc'), limit(500));
+    let unsubscribeMessages = null;
 
-    function renderMessage(msg) {
-      const el = document.createElement('div');
-      el.className = 'message ' + (msg.uid === (currentUser && currentUser.uid) ? 'me' : 'other');
+    // Presence & typing
+    const presenceCol = collection(db, 'presence'); // doc per uid
+    let presenceUnsub = null;
+    const TYPING_TIMEOUT = 1500;
+    let typingTimer = null;
+
+    // WebRTC state
+    let localStream = null;
+    let pc = null;
+    let callDocRef = null;
+    let callerCandidatesCol = null;
+    let calleeCandidatesCol = null;
+    let localAudioEnabled = true;
+
+    // Helpers
+    function logDebug(...args){ debugBox.textContent = (new Date()).toLocaleTimeString() + ' • ' + args.join(' ') + '\n' + debugBox.textContent; }
+    function escapeHTML(s){ return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c])); }
+    function shortUid(uid){ return uid ? uid.slice(0,6) : '(no-uid)'; }
+    function avatarColor(uid){
+      const colors = ['#ef4444','#f97316','#f59e0b','#10b981','#06b6d4','#3b82f6','#8b5cf6','#ec4899'];
+      if(!uid) return colors[0];
+      const n = uid.split('').reduce((a,c)=>a + c.charCodeAt(0),0);
+      return colors[n % colors.length];
+    }
+
+    // Render a message
+    function renderMessage(msg){
+      const row = document.createElement('div');
+      row.className = 'msg-row ' + ((currentUser && msg.uid === currentUser.uid) ? 'me' : 'other');
+
+      const avatar = document.createElement('div');
+      avatar.className = 'avatar';
+      avatar.style.background = avatarColor(msg.uid || msg.displayName || '');
+      avatar.textContent = (msg.displayName || shortUid(msg.uid) || '?').slice(0,2).toUpperCase();
+
+      const bubbleWrap = document.createElement('div');
+      bubbleWrap.style.display = 'flex';
+      bubbleWrap.style.flexDirection = 'column';
 
       const meta = document.createElement('div');
       meta.className = 'meta';
       const name = escapeHTML(msg.displayName || shortUid(msg.uid));
       const time = msg.createdAt && msg.createdAt.toDate ? msg.createdAt.toDate().toLocaleTimeString() : '';
-      meta.innerHTML = `<strong>${name}</strong> <span style="color:var(--muted);margin-left:.4rem">${time}</span>`;
+      meta.innerHTML = `<strong>${name}</strong> <span style="color:var(--muted);margin-left:.45rem">${time}</span>`;
 
-      const text = document.createElement('div');
-      text.innerHTML = escapeHTML(msg.text);
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.innerHTML = escapeHTML(msg.text);
 
-      el.appendChild(meta);
-      el.appendChild(text);
-      return el;
+      bubbleWrap.appendChild(meta);
+      bubbleWrap.appendChild(bubble);
+
+      // order: if me, show bubble then avatar on right
+      if(currentUser && msg.uid === currentUser.uid){
+        row.appendChild(bubbleWrap);
+        row.appendChild(avatar);
+      } else {
+        row.appendChild(avatar);
+        row.appendChild(bubbleWrap);
+      }
+
+      return row;
     }
 
-    // attach listener
-    unsubscribe = onSnapshot(recentQuery, snapshot => {
+    // Messages listener
+    unsubscribeMessages = onSnapshot(recentQuery, snapshot => {
       messagesEl.innerHTML = '';
       const docs = [];
-      snapshot.forEach(doc => {
-        const data = doc.data();
-        docs.push(data);
-      });
-      // docs already ordered asc by createdAt
-      for (const d of docs) {
-        const node = renderMessage(d);
-        messagesEl.appendChild(node);
+      snapshot.forEach(doc => docs.push(doc.data()));
+      for(const d of docs){
+        messagesEl.appendChild(renderMessage(d));
       }
-      scrollToBottom();
+      messagesEl.scrollTop = messagesEl.scrollHeight;
     }, err => {
-      console.error('Listener error', err);
-      statusEl.textContent = 'Listener error: ' + (err.message || err);
+      console.error('Messages listener error', err);
+      logDebug('Messages listener error', err.message || err);
     });
 
     // Send message
-    async function sendMessage() {
+    async function sendMessage(){
       const text = messageInput.value.trim();
-      if (!text) return;
-      if (!currentUser) {
-        statusEl.textContent = 'You must sign in to send messages';
-        return;
-      }
-      // limit length
-      if (text.length > 1000) {
-        statusEl.textContent = 'Message too long (max 1000 chars)';
-        return;
-      }
+      if(!text) return;
+      if(!currentUser){ statusEl.textContent = 'Sign in to send messages'; return; }
+      if(text.length > 1500){ statusEl.textContent = 'Message too long'; return; }
       sendBtn.disabled = true;
       try {
         await addDoc(messagesCol, {
           uid: currentUser.uid,
           displayName: displayName || null,
-          text: text,
+          text,
           createdAt: serverTimestamp()
         });
         messageInput.value = '';
-        statusEl.textContent = 'Message sent';
-      } catch (err) {
-        console.error('Send error', err);
+        statusEl.textContent = 'Sent';
+      } catch(err){
+        console.error(err);
         statusEl.textContent = 'Send failed: ' + (err.message || err);
-      } finally {
-        sendBtn.disabled = false;
-      }
+      } finally { sendBtn.disabled = false; }
+    }
+    sendBtn.addEventListener('click', sendMessage);
+    messageInput.addEventListener('keydown', e => {
+      if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); }
+      // typing indicator
+      notifyTyping();
+    });
+    messageInput.addEventListener('input', notifyTyping);
+
+    // Typing indicator: write typing state to presence doc for this user
+    function notifyTyping(){
+      if(!currentUser) return;
+      setTyping(true);
+      clearTimeout(typingTimer);
+      typingTimer = setTimeout(()=>setTyping(false), TYPING_TIMEOUT);
+    }
+    async function setTyping(val){
+      if(!currentUser) return;
+      try {
+        const pDoc = doc(db, 'presence', currentUser.uid);
+        await setDoc(pDoc, { uid: currentUser.uid, displayName: displayName || null, typing: val, lastSeen: serverTimestamp() }, { merge: true });
+      } catch(e){ console.warn('typing set failed', e); }
     }
 
-    sendBtn.addEventListener('click', sendMessage);
-    messageInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
+    // Presence: watch presence collection to show count and typing
+    const presenceQuery = collection(db, 'presence');
+    presenceUnsub = onSnapshot(presenceQuery, snapshot => {
+      let online = 0;
+      const typers = [];
+      snapshot.forEach(d => {
+        const data = d.data();
+        if(data) online++;
+        if(data.typing && data.uid !== (currentUser && currentUser.uid)) typers.push(data.displayName || shortUid(data.uid));
+      });
+      onlineCount.textContent = `${online} online`;
+      typingIndicator.textContent = typers.length ? `${typers.join(', ')} typing…` : '';
+    });
+
+    // Auth handlers
+    anonBtn.addEventListener('click', async () => {
+      anonBtn.disabled = true;
+      try { await signInAnonymously(auth); }
+      catch (err){ statusEl.textContent = 'Sign-in error: ' + (err.message || err); console.error(err); }
+      finally { anonBtn.disabled = false; }
+    });
+    signOutBtn.addEventListener('click', async () => {
+      signOutBtn.disabled = true;
+      try { await signOut(auth); } catch (err){ console.error(err); statusEl.textContent = 'Sign-out error: ' + err.message; }
+      finally { signOutBtn.disabled = false; }
+    });
+    displayNameInput.addEventListener('change', () => {
+      displayName = displayNameInput.value.trim().slice(0,40);
+      localStorage.setItem('talkalot_displayName', displayName);
+      displayNameLabel.textContent = displayName || '(anonymous)';
+      // update presence
+      if(currentUser) setDoc(doc(db, 'presence', currentUser.uid), { uid: currentUser.uid, displayName, lastSeen: serverTimestamp() }, { merge:true });
+    });
+
+    // Update presence on auth state change
+    onAuthStateChanged(auth, user => {
+      currentUser = user;
+      if(user){
+        statusEl.textContent = 'Signed in ' + (user.isAnonymous ? '(anonymous)' : '');
+        anonBtn.style.display = 'none';
+        signOutBtn.style.display = 'inline-block';
+        uidLabel.textContent = `uid: ${shortUid(user.uid)}`;
+        // create presence doc
+        setDoc(doc(db, 'presence', user.uid), { uid: user.uid, displayName, typing: false, lastSeen: serverTimestamp() }, { merge: true });
+        // remove presence on unload
+        window.addEventListener('beforeunload', () => {
+          // best effort: mark offline
+          setDoc(doc(db, 'presence', user.uid), { lastSeen: serverTimestamp(), online:false }, { merge:true });
+        });
+      } else {
+        statusEl.textContent = 'Not signed in';
+        anonBtn.style.display = 'inline-block';
+        signOutBtn.style.display = 'none';
+        uidLabel.textContent = '';
+      }
+      displayNameLabel.textContent = displayName || (user ? shortUid(user.uid) : '(anonymous)');
+    });
+
+    // -----------------------
+    // WebRTC voice calling (simple Firestore signaling)
+    // WARNING: demo only. For production use TURN servers and auth'd signaling.
+    // -----------------------
+
+    // STUN-only configuration (public Google STUN). Add TURN for production.
+    const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+    // Create a new call (caller)
+    createCallBtn.addEventListener('click', async () => {
+      if(!currentUser){ alert('Sign in first'); return; }
+      createCallBtn.disabled = true;
+      logDebug('Creating call…');
+      try {
+        await startLocalAudio();
+        pc = new RTCPeerConnection(rtcConfig);
+        // add local stream tracks
+        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+        // remote track handling
+        pc.ontrack = (event) => {
+          logDebug('Remote track received');
+          remoteAudio.srcObject = event.streams[0];
+        };
+        // ICE candidates -> save to callerCandidates subcollection
+        callerCandidatesCol = collection(db, 'calls', /*placeholder*/'__tmp__'); // will replace
+        pc.onicecandidate = (event) => {
+          if(event.candidate){
+            const c = event.candidate.toJSON();
+            if(callerCandidatesCol) addDoc(callerCandidatesCol, c).catch(e=>logDebug('ICE write err',e.message));
+          }
+        };
+
+        // create call doc
+        const callRef = doc(collection(db, 'calls'));
+        callDocRef = callRef;
+        callerCandidatesCol = collection(callRef, 'callerCandidates');
+        calleeCandidatesCol = collection(callRef, 'calleeCandidates');
+
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        await setDoc(callRef, { offer: { type: offer.type, sdp: offer.sdp }, createdBy: currentUser.uid, createdAt: serverTimestamp() });
+
+        // listen for answer
+        onDocSnapshot(callRef, async snap => {
+          const data = snap.data();
+          if(!pc.currentRemoteDescription && data && data.answer){
+            logDebug('Answer received, setting remote description');
+            const answer = new RTCSessionDescription(data.answer);
+            await pc.setRemoteDescription(answer);
+            callStatus.textContent = `In call (id: ${callRef.id})`;
+            callInput.value = callRef.id;
+            hangupBtn.style.display = 'inline-block';
+            createCallBtn.style.display = 'none';
+          }
+        });
+
+        // listen for callee ICE candidates
+        onSnapshot(calleeCandidatesCol, snapshot => {
+          snapshot.docChanges().forEach(async change => {
+            if(change.type === 'added'){
+              const c = change.doc.data();
+              try { await pc.addIceCandidate(c); }
+              catch(e){ console.warn('addIceCandidate failed', e); }
+            }
+          });
+        });
+
+        // listen for callerCandidates writes already handled by pc.onicecandidate
+        // show ID to user
+        logDebug('Call created with ID', callRef.id);
+        callStatus.textContent = `Waiting for answer (id: ${callRef.id})`;
+        callInput.value = callRef.id;
+      } catch (e){
+        console.error(e);
+        logDebug('Create call failed', e.message || e);
+        alert('Create call failed: ' + (e.message || e));
+      } finally {
+        createCallBtn.disabled = false;
       }
     });
 
-    // initial UI state
-    statusEl.textContent = 'Ready. Sign in to start chatting.';
-    // focus input for convenience
+    // Join an existing call (callee)
+    joinCallBtn.addEventListener('click', async () => {
+      const callId = callInput.value.trim();
+      if(!callId){ alert('Enter call ID to join'); return; }
+      if(!currentUser){ alert('Sign in first'); return; }
+      joinCallBtn.disabled = true;
+      logDebug('Joining call', callId);
+      try {
+        const callRef = doc(db, 'calls', callId);
+        const callSnap = await getDoc(callRef);
+        if(!callSnap.exists()){
+          alert('Call not found');
+          joinCallBtn.disabled = false;
+          return;
+        }
+        await startLocalAudio();
+        pc = new RTCPeerConnection(rtcConfig);
+        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+        pc.ontrack = (event) => {
+          remoteAudio.srcObject = event.streams[0];
+        };
+        pc.onicecandidate = (event) => {
+          if(event.candidate){
+            const c = event.candidate.toJSON();
+            if(calleeCandidatesCol) addDoc(calleeCandidatesCol, c).catch(e=>logDebug('ICE write err',e.message));
+          }
+        };
+
+        // setup candidate subcollections
+        callerCandidatesCol = collection(callRef, 'callerCandidates');
+        calleeCandidatesCol = collection(callRef, 'calleeCandidates');
+
+        // apply remote offer
+        const data = callSnap.data();
+        if(!data.offer){ throw new Error('Offer not found in call doc'); }
+        await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        await updateDoc(callRef, { answer: { type: answer.type, sdp: answer.sdp } });
+
+        // listen for caller candidates to add
+        onSnapshot(callerCandidatesCol, snapshot => {
+          snapshot.docChanges().forEach(async change => {
+            if(change.type === 'added'){
+              const c = change.doc.data();
+              try { await pc.addIceCandidate(c); } catch(e){ console.warn('addIceCandidate failed', e); }
+            }
+          });
+        });
+
+        // listen for callee candidates (we add via pc.onicecandidate)
+        hangupBtn.style.display = 'inline-block';
+        createCallBtn.style.display = 'none';
+        callStatus.textContent = `In call (id: ${callId})`;
+        logDebug('Joined call', callId);
+      } catch (e){
+        console.error(e);
+        logDebug('Join call failed', e.message || e);
+        alert('Join failed: ' + (e.message || e));
+      } finally {
+        joinCallBtn.disabled = false;
+      }
+    });
+
+    // Mute/unmute local audio track
+    muteBtn.addEventListener('click', () => {
+      if(!localStream) return;
+      localAudioEnabled = !localAudioEnabled;
+      localStream.getAudioTracks().forEach(t => t.enabled = localAudioEnabled);
+      muteBtn.textContent = localAudioEnabled ? 'Mute' : 'Unmute';
+    });
+
+    // Hang up: close pc and optionally remove call doc (caller)
+    hangupBtn.addEventListener('click', async () => {
+      try {
+        if(pc){ pc.close(); pc = null; }
+        if(localStream){ localStream.getTracks().forEach(t => t.stop()); localStream = null; remoteAudio.srcObject = null; }
+        if(callDocRef){
+          // try to delete subcollections + doc (best-effort)
+          // Firestore doesn't allow direct subcollection deletes in client. For demo, just remove answer/offer fields.
+          try { await updateDoc(callDocRef, { endedAt: serverTimestamp() }); } catch(e){}
+          callDocRef = null;
+        }
+        hangupBtn.style.display = 'none';
+        createCallBtn.style.display = 'inline-block';
+        callStatus.textContent = 'Not in call';
+        logDebug('Call ended');
+      } catch(e){ console.warn('hangup error', e); }
+    });
+
+    // Helper: get local audio
+    async function startLocalAudio(){
+      if(localStream) return;
+      localStream = await navigator.mediaDevices.getUserMedia({ audio:true });
+      // attach local audio to a muted element if you want to hear self (not needed)
+      // const localAudioEl = document.createElement('audio'); localAudioEl.muted=true; localAudioEl.srcObject = localStream; localAudioEl.play();
+      // ensure tracks enabled
+      localStream.getAudioTracks().forEach(t => t.enabled = localAudioEnabled);
+    }
+
+    // Shortcuts: pressing Enter in callInput joins
+    callInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); joinCallBtn.click(); } });
+
+    // Debug info
+    logDebug('Client ready — project:', firebaseConfig.projectId);
+
+    // Accessibility: focus message input
     messageInput.focus();
 
-    console.log('Chat ready (client) — project:', firebaseConfig.projectId);
+    // End of module
   </script>
 </body>
 </html>
