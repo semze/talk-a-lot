@@ -141,11 +141,7 @@
       doc,
       setDoc,
       getDoc,
-      updateDoc,
-      arrayUnion,
-      deleteDoc,
-      onSnapshot as onDocSnapshot,
-      writeBatch
+      updateDoc
     } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
 
     // ========================
@@ -267,7 +263,7 @@
     unsubscribeMessages = onSnapshot(recentQuery, snapshot => {
       messagesEl.innerHTML = '';
       const docs = [];
-      snapshot.forEach(doc => docs.push(doc.data()));
+      snapshot.forEach(docSnap => docs.push(docSnap.data()));
       for(const d of docs){
         messagesEl.appendChild(renderMessage(d));
       }
@@ -387,7 +383,7 @@
     // STUN-only configuration (public Google STUN). Add TURN for production.
     const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
-    // Create a new call (caller)
+    // Create a new call (caller) — FIXED: don't create invalid collection paths
     createCallBtn.addEventListener('click', async () => {
       if(!currentUser){ alert('Sign in first'); return; }
       createCallBtn.disabled = true;
@@ -395,15 +391,23 @@
       try {
         await startLocalAudio();
         pc = new RTCPeerConnection(rtcConfig);
+
         // add local stream tracks
         localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
         // remote track handling
         pc.ontrack = (event) => {
           logDebug('Remote track received');
           remoteAudio.srcObject = event.streams[0];
         };
+
+        // create call doc reference (auto-id) and candidate subcollections
+        const callRef = doc(collection(db, 'calls'));
+        callDocRef = callRef;
+        callerCandidatesCol = collection(callRef, 'callerCandidates');
+        calleeCandidatesCol = collection(callRef, 'calleeCandidates');
+
         // ICE candidates -> save to callerCandidates subcollection
-        callerCandidatesCol = collection(db, 'calls', /*placeholder*/'__tmp__'); // will replace
         pc.onicecandidate = (event) => {
           if(event.candidate){
             const c = event.candidate.toJSON();
@@ -411,18 +415,18 @@
           }
         };
 
-        // create call doc
-        const callRef = doc(collection(db, 'calls'));
-        callDocRef = callRef;
-        callerCandidatesCol = collection(callRef, 'callerCandidates');
-        calleeCandidatesCol = collection(callRef, 'calleeCandidates');
-
+        // create and persist offer
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
-        await setDoc(callRef, { offer: { type: offer.type, sdp: offer.sdp }, createdBy: currentUser.uid, createdAt: serverTimestamp() });
 
-        // listen for answer
-        onDocSnapshot(callRef, async snap => {
+        await setDoc(callRef, {
+          offer: { type: offer.type, sdp: offer.sdp },
+          createdBy: currentUser.uid,
+          createdAt: serverTimestamp()
+        });
+
+        // listen for answer on call doc
+        onSnapshot(callRef, async snap => {
           const data = snap.data();
           if(!pc.currentRemoteDescription && data && data.answer){
             logDebug('Answer received, setting remote description');
@@ -440,14 +444,11 @@
           snapshot.docChanges().forEach(async change => {
             if(change.type === 'added'){
               const c = change.doc.data();
-              try { await pc.addIceCandidate(c); }
-              catch(e){ console.warn('addIceCandidate failed', e); }
+              try { await pc.addIceCandidate(c); } catch(e){ console.warn('addIceCandidate failed', e); }
             }
           });
         });
 
-        // listen for callerCandidates writes already handled by pc.onicecandidate
-        // show ID to user
         logDebug('Call created with ID', callRef.id);
         callStatus.textContent = `Waiting for answer (id: ${callRef.id})`;
         callInput.value = callRef.id;
@@ -511,7 +512,6 @@
           });
         });
 
-        // listen for callee candidates (we add via pc.onicecandidate)
         hangupBtn.style.display = 'inline-block';
         createCallBtn.style.display = 'none';
         callStatus.textContent = `In call (id: ${callId})`;
@@ -533,14 +533,12 @@
       muteBtn.textContent = localAudioEnabled ? 'Mute' : 'Unmute';
     });
 
-    // Hang up: close pc and optionally remove call doc (caller)
+    // Hang up: close pc and optionally mark call doc ended
     hangupBtn.addEventListener('click', async () => {
       try {
         if(pc){ pc.close(); pc = null; }
         if(localStream){ localStream.getTracks().forEach(t => t.stop()); localStream = null; remoteAudio.srcObject = null; }
         if(callDocRef){
-          // try to delete subcollections + doc (best-effort)
-          // Firestore doesn't allow direct subcollection deletes in client. For demo, just remove answer/offer fields.
           try { await updateDoc(callDocRef, { endedAt: serverTimestamp() }); } catch(e){}
           callDocRef = null;
         }
@@ -554,11 +552,13 @@
     // Helper: get local audio
     async function startLocalAudio(){
       if(localStream) return;
-      localStream = await navigator.mediaDevices.getUserMedia({ audio:true });
-      // attach local audio to a muted element if you want to hear self (not needed)
-      // const localAudioEl = document.createElement('audio'); localAudioEl.muted=true; localAudioEl.srcObject = localStream; localAudioEl.play();
-      // ensure tracks enabled
-      localStream.getAudioTracks().forEach(t => t.enabled = localAudioEnabled);
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({ audio:true });
+        localStream.getAudioTracks().forEach(t => t.enabled = localAudioEnabled);
+      } catch (e) {
+        logDebug('getUserMedia failed', e.message || e);
+        throw e;
+      }
     }
 
     // Shortcuts: pressing Enter in callInput joins
