@@ -3,24 +3,25 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Talk-a-lot — Chat, Images, Private DMs & Calls</title>
+  <title>Talk-a-lot — Live Chat + Voice</title>
   <style>
     :root{
       --bg:#f6f8fa; --card:#fff; --muted:#6b7280; --accent:#0366d6; --me:#e6f0ff;
       --glass: rgba(255,255,255,0.8);
     }
     *{box-sizing:border-box}
-    body{font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial; margin:0; padding:1.25rem; background:var(--bg); color:#0f172a}
-    .wrap{max-width:1100px; margin:0 auto; display:grid; gap:1rem; grid-template-columns: 1fr 380px;}
+    body{font-family:Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial; margin:0; padding:1.25rem; background:var(--bg); color:#0f172a}
+    .wrap{max-width:1100px; margin:0 auto; display:grid; gap:1rem; grid-template-columns: 1fr 360px;}
     @media (max-width:980px){ .wrap{ grid-template-columns:1fr } }
     .panel{background:var(--card); padding:1rem; border-radius:12px; box-shadow:0 8px 30px rgba(2,6,23,0.06); }
     header{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:0.5rem}
     h1{font-size:1.125rem;margin:0}
     .status{color:var(--muted); font-size:0.9rem}
-    .chat{display:flex;flex-direction:column; height:72vh; gap:0.75rem}
+    /* Chat column */
+    .chat{display:flex;flex-direction:column; height:75vh; gap:0.75rem}
     .messages{flex:1; overflow:auto; padding:0.5rem; border-radius:8px; background:linear-gradient(180deg,#ffffff, #fbfdff); border:1px solid #eef2f7}
-    .msg-row{display:flex; gap:0.6rem; margin-bottom:0.55rem; align-items:flex-end}
-    .avatar{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;flex:0 0 44px}
+    .msg-row{display:flex; gap:0.6rem; margin-bottom:0.55rem}
+    .avatar{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600}
     .bubble{padding:0.5rem 0.7rem;border-radius:10px;max-width:78%; word-wrap:break-word;box-shadow:0 1px 0 rgba(0,0,0,0.02)}
     .meta{font-size:0.78rem;color:var(--muted); margin-bottom:0.25rem}
     .me { margin-left:auto; display:flex; gap:0.6rem; align-items:flex-end }
@@ -28,27 +29,28 @@
     .other .bubble{background:#f7f8fb}
     .inputRow{display:flex; gap:0.5rem; align-items:center}
     textarea{flex:1; min-height:54px; padding:0.6rem; border-radius:8px; border:1px solid #e6eef6; resize:vertical; font-size:0.95rem}
-    input[type="text"]{padding:0.45rem;border-radius:8px;border:1px solid #e6eef6}
-    button{padding:0.5rem .75rem;border-radius:8px;border:1px solid #d6dbe6;background:#fff;cursor:pointer}
+    input[type="text"]{padding:0.5rem;border-radius:8px;border:1px solid #e6eef6}
+    button{padding:0.55rem .8rem;border-radius:8px;border:1px solid #d6dbe6;background:#fff;cursor:pointer}
     button.primary{background:var(--accent); color:#fff; border-color:transparent}
     .small{font-size:0.88rem;color:var(--muted)}
+    /* Right column (controls/calls) */
     .side-section{display:flex;flex-direction:column;gap:0.75rem}
     .call-card{display:flex;flex-direction:column;gap:0.6rem}
+    .call-actions{display:flex;gap:0.5rem;align-items:center}
+    .toggle{display:inline-flex;align-items:center;gap:0.5rem;padding:.4rem .6rem;border-radius:8px;border:1px solid #e6eef6;background:var(--glass)}
     audio{width:100%}
+    .hint{font-size:0.82rem;color:var(--muted)}
     select{padding:.45rem;border-radius:8px;border:1px solid #e6eef6;background:#fff}
     .device-row{display:flex;gap:.5rem;align-items:center}
-    .file-preview{max-width:240px;max-height:160px;border-radius:8px;display:block}
-    .user-list{max-height:120px;overflow:auto;border:1px solid #eef2f7;border-radius:8px;padding:.4rem}
-    .presence-row{display:flex;justify-content:space-between;align-items:center;padding:.25rem .35rem}
-    .in-call-badge{background:#10b981;color:white;padding:.18rem .5rem;border-radius:999px;font-size:.78rem}
   </style>
 </head>
 <body>
   <div class="wrap">
+    <!-- Chat column -->
     <div class="panel">
       <header>
         <div>
-          <h1>Talk-a-lot — Chat & Voice</h1>
+          <h1>Talk-a-lot — Live Chat</h1>
           <div class="status" id="status">Initializing…</div>
         </div>
         <div style="text-align:right">
@@ -58,43 +60,39 @@
       </header>
 
       <div class="chat">
+        <div class="messages" id="messages" aria-live="polite"></div>
+
         <div style="display:flex;gap:.5rem;align-items:center;">
-          <input id="displayName" type="text" placeholder="Display name (optional)" style="width:220px" />
-          <input id="avatarFile" type="file" accept="image/*" style="width:180px"/>
+          <input id="displayName" type="text" placeholder="Display name (optional)" style="width:240px" />
           <div style="flex:1"></div>
           <button id="signOut" style="display:none">Sign out</button>
           <button id="anonSignIn">Sign in anonymously</button>
         </div>
 
-        <div class="messages" id="messages" aria-live="polite"></div>
-
-        <div style="display:flex;gap:.5rem;align-items:center">
-          <input id="dmSelect" type="text" placeholder="@username or leave empty for public" style="width:240px"/>
-          <input id="imageInput" type="file" accept="image/*" />
-          <button id="sendImageBtn">Upload & Send</button>
-        </div>
-
         <div class="inputRow">
-          <textarea id="messageInput" placeholder="Type a message (Enter to send)"></textarea>
+          <textarea id="messageInput" placeholder="Type a message (press Enter to send)"></textarea>
           <button id="sendBtn" class="primary">Send</button>
         </div>
 
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
-          <div class="small">Messages are stored in <code>chat_messages</code>. Use @username to DM.</div>
+          <div class="small">Messages are public in collection <code>chat_messages</code></div>
           <div class="small" id="typingIndicator"></div>
         </div>
       </div>
     </div>
 
+    <!-- Side column: calls, presence, controls -->
     <div class="panel side-section">
       <div>
-        <div class="small">Users & Presence</div>
-        <div class="user-list" id="userList">—</div>
+        <div class="small">Presence</div>
+        <div style="display:flex;gap:.6rem;align-items:center;margin-top:.4rem">
+          <div style="width:12px;height:12px;border-radius:50%;background:#10b981"></div>
+          <div class="hint" id="onlineCount">— online</div>
+        </div>
       </div>
 
       <div class="call-card">
-        <div class="small">Device / Call Controls</div>
-
+        <div class="small">Device selection</div>
         <div class="device-row" style="margin-top:.35rem">
           <label class="small" for="inputSelect">Mic</label>
           <select id="inputSelect"></select>
@@ -106,14 +104,15 @@
 
         <div style="height:8px"></div>
 
+        <div class="small">Voice calls (peer-to-peer)</div>
+
         <div style="display:flex;gap:.5rem">
           <button id="createCallBtn">Create Call</button>
           <button id="hangupBtn" style="display:none">Hang up</button>
-          <button id="screenShareBtn">Share Screen</button>
         </div>
 
         <div style="display:flex;gap:.5rem;margin-top:.4rem">
-          <input id="callInput" placeholder="Call ID to join" style="flex:1" />
+          <input id="callInput" type="text" placeholder="Enter call ID to join" style="flex:1" />
           <button id="joinCallBtn">Join</button>
         </div>
 
@@ -124,18 +123,19 @@
 
         <div style="margin-top:.6rem">
           <audio id="remoteAudio" autoplay playsinline></audio>
-          <div class="hint" style="margin-top:.4rem">This demo uses STUN only — add TURN for reliability.</div>
+          <div class="hint" style="margin-top:.4rem">NOTE: This demo uses a public STUN server only. For reliable calls behind NATs, add a TURN server (production).</div>
         </div>
       </div>
 
       <div>
-        <div class="small">Debug</div>
+        <div class="small">Debug / Info</div>
         <div class="hint" id="debugBox" style="margin-top:.4rem;white-space:pre-wrap;max-height:220px;overflow:auto"></div>
       </div>
     </div>
   </div>
 
   <script type="module">
+    // Firebase + Firestore libs (modular) via CDN
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
     import {
       getAuth,
@@ -155,18 +155,11 @@
       doc,
       setDoc,
       getDoc,
-      updateDoc,
-      where,
-      getDocs
+      updateDoc
     } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
-    import {
-      getStorage,
-      ref as storageRef,
-      uploadBytesResumable,
-      getDownloadURL
-    } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-storage.js";
 
-    // CONFIG (your web config)
+    // ========================
+    // CONFIG — keep your project's config
     const firebaseConfig = {
       apiKey: "AIzaSyD2Q2TDCQDVcmmhR7zzVVTMtBkaS40cOx0",
       authDomain: "talk-a-lot-5aad8.firebaseapp.com",
@@ -176,32 +169,31 @@
       appId: "1:373420699612:web:11f4470e6e0097b6576919",
       measurementId: "G-P0VNPFJ2HD"
     };
+    // ========================
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
-    const storage = getStorage(app);
 
     // UI refs
     const statusEl = document.getElementById('status');
-    const displayNameInput = document.getElementById('displayName');
-    const displayNameLabel = document.getElementById('displayNameLabel');
-    const uidLabel = document.getElementById('uidLabel');
-    const avatarFile = document.getElementById('avatarFile');
     const messagesEl = document.getElementById('messages');
     const messageInput = document.getElementById('messageInput');
     const sendBtn = document.getElementById('sendBtn');
-    const imageInput = document.getElementById('imageInput');
-    const sendImageBtn = document.getElementById('sendImageBtn');
-    const dmSelect = document.getElementById('dmSelect');
     const anonBtn = document.getElementById('anonSignIn');
     const signOutBtn = document.getElementById('signOut');
+    const displayNameInput = document.getElementById('displayName');
+    const displayNameLabel = document.getElementById('displayNameLabel');
+    const uidLabel = document.getElementById('uidLabel');
     const typingIndicator = document.getElementById('typingIndicator');
-    const userList = document.getElementById('userList');
+    const onlineCount = document.getElementById('onlineCount');
     const debugBox = document.getElementById('debugBox');
 
+    // Device UI
     const inputSelect = document.getElementById('inputSelect');
     const outputSelect = document.getElementById('outputSelect');
+
+    // Call UI
     const createCallBtn = document.getElementById('createCallBtn');
     const joinCallBtn = document.getElementById('joinCallBtn');
     const callInput = document.getElementById('callInput');
@@ -209,52 +201,45 @@
     const muteBtn = document.getElementById('muteBtn');
     const callStatus = document.getElementById('callStatus');
     const remoteAudio = document.getElementById('remoteAudio');
-    const screenShareBtn = document.getElementById('screenShareBtn');
 
-    // state
+    // Local state
     let currentUser = null;
     let displayName = localStorage.getItem('talkalot_displayName') || '';
     displayNameInput.value = displayName;
     displayNameLabel.textContent = displayName || '(anonymous)';
 
+    // Device selection state
     const SAVE_KEYS = { input: 'talkalot_inputDevice', output: 'talkalot_outputDevice' };
+
+    // Chat setup
+    const messagesCol = collection(db, 'chat_messages');
+    const recentQuery = query(messagesCol, orderBy('createdAt', 'asc'), limit(500));
+
+    // Presence & typing
+    const presenceCol = collection(db, 'presence'); // doc per uid
+    const TYPING_TIMEOUT = 1500;
+    let typingTimer = null;
+
+    // WebRTC state
     let localStream = null;
     let pc = null;
     let callDocRef = null;
     let callerCandidatesCol = null;
     let calleeCandidatesCol = null;
     let localAudioEnabled = true;
-    const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
-    // helpers
+    // Helpers
     function logDebug(...args){ debugBox.textContent = (new Date()).toLocaleTimeString() + ' • ' + args.join(' ') + '\n' + debugBox.textContent; }
-    function escapeHTML(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c])); }
+    function escapeHTML(s){ return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c])); }
     function shortUid(uid){ return uid ? uid.slice(0,6) : '(no-uid)'; }
-    function avatarColor(uid){ const colors=['#ef4444','#f97316','#f59e0b','#10b981','#06b6d4','#3b82f6','#8b5cf6','#ec4899']; return colors[(uid||'').split('').reduce((a,c)=>a+c.charCodeAt(0),0) % colors.length]; }
+    function avatarColor(uid){
+      const colors = ['#ef4444','#f97316','#f59e0b','#10b981','#06b6d4','#3b82f6','#8b5cf6','#ec4899'];
+      if(!uid) return colors[0];
+      const n = uid.split('').reduce((a,c)=>a + c.charCodeAt(0),0);
+      return colors[n % colors.length];
+    }
 
-    // messages
-    const messagesCol = collection(db, 'chat_messages');
-    const recentQuery = query(messagesCol, orderBy('createdAt', 'asc'), limit(1000));
-
-    onSnapshot(recentQuery, snapshot => {
-      messagesEl.innerHTML = '';
-      const docs = [];
-      snapshot.forEach(s => docs.push({ id: s.id, data: s.data() }));
-      // client-side filter: show public + DMs relevant to current user
-      for (const d of docs) {
-        const msg = d.data;
-        if (!msg.to || !currentUser) {
-          // public or not signed in: show public only
-          if (!msg.to) messagesEl.appendChild(renderMessage(msg));
-        } else {
-          // show if public or DM where current is sender or recipient
-          if (!msg.to) messagesEl.appendChild(renderMessage(msg));
-          else if (msg.to === currentUser.uid || msg.uid === currentUser.uid) messagesEl.appendChild(renderMessage(msg));
-        }
-      }
-      messagesEl.scrollTop = messagesEl.scrollHeight;
-    }, err => logDebug('messages listener', err.message || err));
-
+    // Render a message
     function renderMessage(msg){
       const row = document.createElement('div');
       row.className = 'msg-row ' + ((currentUser && msg.uid === currentUser.uid) ? 'me' : 'other');
@@ -265,420 +250,469 @@
       avatar.textContent = (msg.displayName || shortUid(msg.uid) || '?').slice(0,2).toUpperCase();
 
       const bubbleWrap = document.createElement('div');
-      bubbleWrap.style.display = 'flex'; bubbleWrap.style.flexDirection='column';
+      bubbleWrap.style.display = 'flex';
+      bubbleWrap.style.flexDirection = 'column';
 
-      const meta = document.createElement('div'); meta.className='meta';
+      const meta = document.createElement('div');
+      meta.className = 'meta';
       const name = escapeHTML(msg.displayName || shortUid(msg.uid));
       const time = msg.createdAt && msg.createdAt.toDate ? msg.createdAt.toDate().toLocaleTimeString() : '';
-      const dmTag = msg.to ? `<span style="color:#9ca3af;margin-left:.45rem">DM</span>` : '';
-      meta.innerHTML = `<strong>${name}</strong> <span style="color:var(--muted);margin-left:.45rem">${time}</span>${dmTag}`;
+      meta.innerHTML = `<strong>${name}</strong> <span style="color:var(--muted);margin-left:.45rem">${time}</span>`;
 
-      const bubble = document.createElement('div'); bubble.className='bubble';
-      if (msg.imageUrl) {
-        // image message
-        const img = document.createElement('img');
-        img.src = msg.imageUrl;
-        img.className = 'file-preview';
-        img.alt = msg.text || 'image';
-        bubble.appendChild(img);
-        if (msg.text) {
-          const caption = document.createElement('div');
-          caption.textContent = msg.text;
-          caption.style.marginTop = '.3rem';
-          bubble.appendChild(caption);
-        }
-      } else {
-        bubble.innerHTML = escapeHTML(msg.text || '');
-      }
-
-      // in-call badge if presence says inCall
-      if (msg.inCallBadge) {
-        const badge = document.createElement('span');
-        badge.className = 'in-call-badge';
-        badge.textContent = 'in call';
-        meta.appendChild(badge);
-      }
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.innerHTML = escapeHTML(msg.text);
 
       bubbleWrap.appendChild(meta);
       bubbleWrap.appendChild(bubble);
 
-      if (currentUser && msg.uid === currentUser.uid) {
-        row.appendChild(bubbleWrap); row.appendChild(avatar);
+      // order: if me, show bubble then avatar on right
+      if(currentUser && msg.uid === currentUser.uid){
+        row.appendChild(bubbleWrap);
+        row.appendChild(avatar);
       } else {
-        row.appendChild(avatar); row.appendChild(bubbleWrap);
+        row.appendChild(avatar);
+        row.appendChild(bubbleWrap);
       }
+
       return row;
     }
 
-    // send text message (supports DM using @username in dmSelect)
-    sendBtn.addEventListener('click', sendMessage);
-    messageInput.addEventListener('keydown', e => { if (e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); } });
+    // Messages listener
+    onSnapshot(recentQuery, snapshot => {
+      messagesEl.innerHTML = '';
+      const docs = [];
+      snapshot.forEach(docSnap => docs.push(docSnap.data()));
+      for(const d of docs){
+        messagesEl.appendChild(renderMessage(d));
+      }
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }, err => {
+      console.error('Messages listener error', err);
+      logDebug('Messages listener error', err.message || err);
+    });
 
+    // Send message
     async function sendMessage(){
       const text = messageInput.value.trim();
-      if(!text && !imageInput.files.length) return;
-      if(!currentUser){ statusEl.textContent = 'Sign in to send'; return; }
+      if(!text) return;
+      if(!currentUser){ statusEl.textContent = 'Sign in to send messages'; return; }
+      if(text.length > 1500){ statusEl.textContent = 'Message too long'; return; }
       sendBtn.disabled = true;
       try {
-        const toUsername = dmSelect.value.trim().replace(/^@/,'');
-        let toUid = null;
-        if (toUsername) {
-          // lookup presence collection for username -> uid (simple approach: store displayName->uid in presence docs)
-          const presSnap = await getDocs(query(collection(db,'presence'), where('displayName','==',toUsername)));
-          if (!presSnap.empty) toUid = presSnap.docs[0].id;
-        }
-
         await addDoc(messagesCol, {
           uid: currentUser.uid,
           displayName: displayName || null,
           text,
-          to: toUid || null,
-          imageUrl: null,
           createdAt: serverTimestamp()
         });
         messageInput.value = '';
         statusEl.textContent = 'Sent';
-      } catch (e) {
-        console.error(e);
-        statusEl.textContent = 'Send failed: ' + (e.message || e);
-      } finally { sendBtn.disabled=false; }
+      } catch(err){
+        console.error(err);
+        statusEl.textContent = 'Send failed: ' + (err.message || err);
+      } finally { sendBtn.disabled = false; }
     }
-
-    // IMAGE upload & send
-    sendImageBtn.addEventListener('click', async ()=>{
-      const file = imageInput.files[0];
-      if(!file){ alert('Pick an image'); return; }
-      if(!currentUser){ alert('Sign in first'); return; }
-      const fileName = `${currentUser.uid}_${Date.now()}_${file.name.replace(/\s+/g,'_')}`;
-      const path = `chat_images/${currentUser.uid}/${fileName}`;
-      const ref = storageRef(storage, path);
-      const uploadTask = uploadBytesResumable(ref, file);
-      sendImageBtn.disabled = true;
-      try {
-        await new Promise((res, rej) => {
-          uploadTask.on('state_changed', ()=>{}, rej, async ()=>{
-            try {
-              const url = await getDownloadURL(ref);
-              // send message with imageUrl
-              const toUsername = dmSelect.value.trim().replace(/^@/,'');
-              let toUid = null;
-              if (toUsername) {
-                const presSnap = await getDocs(query(collection(db,'presence'), where('displayName','==',toUsername)));
-                if (!presSnap.empty) toUid = presSnap.docs[0].id;
-              }
-              await addDoc(messagesCol, {
-                uid: currentUser.uid,
-                displayName: displayName || null,
-                text: '',
-                to: toUid || null,
-                imageUrl: url,
-                createdAt: serverTimestamp()
-              });
-              res();
-            } catch(e){ rej(e); }
-          });
-        });
-        imageInput.value = '';
-        statusEl.textContent = 'Image sent';
-      } catch(e){
-        console.error(e);
-        statusEl.textContent = 'Upload failed: ' + (e.message || e);
-      } finally { sendImageBtn.disabled=false; }
+    sendBtn.addEventListener('click', sendMessage);
+    messageInput.addEventListener('keydown', e => {
+      if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); }
+      notifyTyping();
     });
+    messageInput.addEventListener('input', notifyTyping);
 
-    // Presence list & avatars + allow DM click
-    onSnapshot(collection(db,'presence'), snapshot => {
-      userList.innerHTML = '';
-      snapshot.forEach(d=>{
-        const data = d.data();
-        const uid = d.id;
-        const row = document.createElement('div');
-        row.className = 'presence-row';
-        const left = document.createElement('div');
-        left.style.display='flex'; left.style.alignItems='center'; left.style.gap='.6rem';
-        const avatar = document.createElement('div'); avatar.className='avatar';
-        avatar.style.width='32px'; avatar.style.height='32px'; avatar.style.fontSize='12px';
-        avatar.style.background = avatarColor(uid);
-        avatar.textContent = (data.displayName||shortUid(uid)).slice(0,2).toUpperCase();
-        const name = document.createElement('div'); name.textContent = data.displayName || shortUid(uid);
-        left.appendChild(avatar); left.appendChild(name);
-        const right = document.createElement('div');
-        if (data.inCall) {
-          const badge = document.createElement('span'); badge.className='in-call-badge'; badge.textContent='in call';
-          right.appendChild(badge);
-        }
-        const dmBtn = document.createElement('button'); dmBtn.textContent='DM'; dmBtn.style.marginLeft='8px';
-        dmBtn.addEventListener('click', ()=>{ dmSelect.value = '@' + (data.displayName || shortUid(uid)); });
-        right.appendChild(dmBtn);
-        row.appendChild(left); row.appendChild(right);
-        userList.appendChild(row);
-      });
-    });
-
-    // typing indicator (presence writing)
-    let typingTimer = null;
-    function setTyping(val){
+    // Typing indicator: write typing state to presence doc for this user
+    async function setTyping(val){
       if(!currentUser) return;
-      setDoc(doc(db,'presence', currentUser.uid), { uid: currentUser.uid, displayName: displayName||null, typing: val, lastSeen: serverTimestamp() }, { merge: true });
+      try {
+        const pDoc = doc(db, 'presence', currentUser.uid);
+        await setDoc(pDoc, { uid: currentUser.uid, displayName: displayName || null, typing: val, lastSeen: serverTimestamp() }, { merge: true });
+      } catch(e){ console.warn('typing set failed', e); }
     }
-    messageInput.addEventListener('input', ()=>{
+    function notifyTyping(){
       if(!currentUser) return;
       setTyping(true);
       clearTimeout(typingTimer);
-      typingTimer = setTimeout(()=>setTyping(false), 1200);
+      typingTimer = setTimeout(()=>setTyping(false), TYPING_TIMEOUT);
+    }
+
+    // Presence: watch presence collection to show count and typing
+    onSnapshot(collection(db,'presence'), snapshot => {
+      let online = 0;
+      const typers = [];
+      snapshot.forEach(d => {
+        const data = d.data();
+        if(data) online++;
+        if(data.typing && data.uid !== (currentUser && currentUser.uid)) typers.push(data.displayName || shortUid(data.uid));
+      });
+      onlineCount.textContent = `${online} online`;
+      typingIndicator.textContent = typers.length ? `${typers.join(', ')} typing…` : '';
     });
 
-    // auth & avatar upload
-    anonBtn.addEventListener('click', async ()=>{
+    // Auth handlers
+    anonBtn.addEventListener('click', async () => {
       anonBtn.disabled = true;
-      try { await signInAnonymously(auth); } catch(e){ console.error(e); } finally { anonBtn.disabled=false; }
+      try { await signInAnonymously(auth); }
+      catch (err){ statusEl.textContent = 'Sign-in error: ' + (err.message || err); console.error(err); }
+      finally { anonBtn.disabled = false; }
     });
-    signOutBtn.addEventListener('click', async ()=>{ await signOut(auth); });
-
-    avatarFile.addEventListener('change', async ()=>{
-      const f = avatarFile.files[0];
-      if(!f) return;
-      if(!currentUser) { alert('Sign in to upload avatar'); return; }
-      const path = `avatars/${currentUser.uid}/${Date.now()}_${f.name.replace(/\s+/g,'_')}`;
-      const ref = storageRef(storage, path);
-      try {
-        await uploadBytesResumable(ref, f);
-        const url = await getDownloadURL(ref);
-        await setDoc(doc(db,'presence',currentUser.uid), { avatarUrl: url }, { merge:true });
-        logDebug('Uploaded avatar');
-      } catch(e){ console.warn('avatar upload failed', e); }
+    signOutBtn.addEventListener('click', async () => {
+      signOutBtn.disabled = true;
+      try { await signOut(auth); } catch (err){ console.error(err); statusEl.textContent = 'Sign-out error: ' + err.message; }
+      finally { signOutBtn.disabled = false; }
+    });
+    displayNameInput.addEventListener('change', () => {
+      displayName = displayNameInput.value.trim().slice(0,40);
+      localStorage.setItem('talkalot_displayName', displayName);
+      displayNameLabel.textContent = displayName || '(anonymous)';
+      if(currentUser) setDoc(doc(db, 'presence', currentUser.uid), { uid: currentUser.uid, displayName, lastSeen: serverTimestamp() }, { merge:true });
     });
 
-    // Auth state handling and presence create
+    // Update presence on auth state change
     onAuthStateChanged(auth, user => {
       currentUser = user;
       if(user){
         statusEl.textContent = 'Signed in ' + (user.isAnonymous ? '(anonymous)' : '');
-        anonBtn.style.display='none'; signOutBtn.style.display='inline-block';
+        anonBtn.style.display = 'none';
+        signOutBtn.style.display = 'inline-block';
         uidLabel.textContent = `uid: ${shortUid(user.uid)}`;
-        // create presence entry (merge) and include avatar/displayName/inCall
-        setDoc(doc(db,'presence',user.uid), { uid: user.uid, displayName: displayName || null, inCall: false, typing: false, lastSeen: serverTimestamp() }, { merge:true });
-        window.addEventListener('beforeunload', ()=> setDoc(doc(db,'presence',user.uid), { lastSeen: serverTimestamp(), online:false }, { merge:true }));
+        setDoc(doc(db, 'presence', user.uid), { uid: user.uid, displayName, typing: false, lastSeen: serverTimestamp() }, { merge: true });
+        window.addEventListener('beforeunload', () => {
+          setDoc(doc(db, 'presence', user.uid), { lastSeen: serverTimestamp(), online:false }, { merge:true });
+        });
       } else {
         statusEl.textContent = 'Not signed in';
-        anonBtn.style.display='inline-block'; signOutBtn.style.display='none';
-        uidLabel.textContent='';
+        anonBtn.style.display = 'inline-block';
+        signOutBtn.style.display = 'none';
+        uidLabel.textContent = '';
       }
       displayNameLabel.textContent = displayName || (user ? shortUid(user.uid) : '(anonymous)');
     });
 
-    // device selection: enumerate & populate
-    async function enumerateAndPopulateDevices(){
+    // -----------------------
+    // Device selection & management
+    // -----------------------
+    async function enumerateAndPopulateDevices() {
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
-        const inputs = devices.filter(d=>d.kind==='audioinput');
-        const outputs = devices.filter(d=>d.kind==='audiooutput');
-
-        inputSelect.innerHTML = ''; outputSelect.innerHTML = '';
-        const noneOpt = document.createElement('option'); noneOpt.value=''; noneOpt.textContent='Default'; inputSelect.appendChild(noneOpt.cloneNode(true)); outputSelect.appendChild(noneOpt.cloneNode(true));
-        inputs.forEach(d=>{ const o=document.createElement('option'); o.value=d.deviceId; o.textContent=d.label || 'Mic'; inputSelect.appendChild(o); });
-        outputs.forEach(d=>{ const o=document.createElement('option'); o.value=d.deviceId; o.textContent=d.label || 'Speaker'; outputSelect.appendChild(o); });
+        const inputs = devices.filter(d => d.kind === 'audioinput');
+        const outputs = devices.filter(d => d.kind === 'audiooutput');
 
         const savedIn = localStorage.getItem(SAVE_KEYS.input) || '';
         const savedOut = localStorage.getItem(SAVE_KEYS.output) || '';
-        if(savedIn) inputSelect.value = savedIn;
-        if(savedOut) outputSelect.value = savedOut;
-      } catch(e){ console.warn('enumerateDevices', e); }
-    }
-    navigator.mediaDevices?.addEventListener?.('devicechange', enumerateAndPopulateDevices);
-    (async ()=>{ try { await navigator.mediaDevices.getUserMedia({audio:true}); } catch(e){} finally{ enumerateAndPopulateDevices(); } })();
 
-    // apply speaker sink
-    async function applyOutputDevice(deviceId){
+        // helper to set options
+        function fill(selectEl, list, saved, kindLabel) {
+          const prev = selectEl.value;
+          selectEl.innerHTML = '';
+          const noneOpt = document.createElement('option');
+          noneOpt.value = '';
+          noneOpt.textContent = `Default ${kindLabel}`;
+          selectEl.appendChild(noneOpt);
+          list.forEach(d=>{
+            const option = document.createElement('option');
+            option.value = d.deviceId;
+            // device labels may be empty until permission granted
+            option.textContent = d.label || `${kindLabel} ${selectEl.length}`;
+            selectEl.appendChild(option);
+          });
+          if(saved) selectEl.value = saved;
+          else if(prev) selectEl.value = prev;
+        }
+
+        fill(inputSelect, inputs, savedIn, 'Mic');
+        fill(outputSelect, outputs, savedOut, 'Speaker');
+
+        // if output saved set sink now
+        const outId = outputSelect.value;
+        if(outId) await applyOutputDevice(outId);
+      } catch (e) {
+        console.warn('enumerateDevices failed', e);
+      }
+    }
+
+    // apply chosen output device to remoteAudio
+    async function applyOutputDevice(deviceId) {
       if(!remoteAudio) return;
-      if(typeof remoteAudio.setSinkId !== 'function') { logDebug('setSinkId not supported'); return; }
-      try { await remoteAudio.setSinkId(deviceId || ''); localStorage.setItem(SAVE_KEYS.output, deviceId||''); logDebug('Output set', deviceId||'default'); } catch(e){ console.warn('setSinkId failed', e); }
-    }
-    outputSelect.addEventListener('change', ()=> applyOutputDevice(outputSelect.value));
-
-    // start local audio with selected input and optionally replace track in pc
-    async function startLocalAudio(){
-      const selectedInput = inputSelect.value || '';
-      const constraints = { audio: selectedInput ? { deviceId: { exact: selectedInput }, echoCancellation:true } : { echoCancellation:true } };
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
-        if(localStream) localStream.getTracks().forEach(t=>t.stop());
-        localStream = stream;
-        if(pc){
-          const senders = pc.getSenders ? pc.getSenders() : [];
-          const newTrack = localStream.getAudioTracks()[0];
-          for(const s of senders){ if(s.track && s.track.kind==='audio'){ try { s.replaceTrack(newTrack); } catch(e){ console.warn('replaceTrack', e); } } }
-        }
-        localStorage.setItem(SAVE_KEYS.input, selectedInput||'');
-        logDebug('Local audio started');
-        return stream;
-      } catch(e){ logDebug('startLocalAudio failed ' + (e.message||e)); throw e; }
-    }
-
-    // WebRTC signaling (private calls supported via allowedParticipants field)
-    function makeCallDocRef(){ return doc(collection(db,'calls')); }
-
-    async function createCall(allowedParticipantUid=null){
-      if(!currentUser) throw new Error('Sign in first');
-      await startLocalAudio();
-      pc = new RTCPeerConnection(rtcConfig);
-      localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
-      pc.ontrack = e => { remoteAudio.srcObject = e.streams[0]; remoteAudio.play().catch(()=>{}); };
-      // create call doc & subcollections
-      const callRef = makeCallDocRef();
-      callDocRef = callRef;
-      callerCandidatesCol = collection(callRef,'callerCandidates');
-      calleeCandidatesCol = collection(callRef,'calleeCandidates');
-
-      pc.onicecandidate = e => { if(e.candidate) addDoc(callerCandidatesCol, e.candidate.toJSON()).catch(()=>{}); };
-
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-
-      const participants = allowedParticipantUid ? [currentUser.uid, allowedParticipantUid] : [currentUser.uid];
-
-      await setDoc(callRef, {
-        offer: { type: offer.type, sdp: offer.sdp },
-        createdBy: currentUser.uid,
-        participants,
-        createdAt: serverTimestamp(),
-        endedAt: null
-      });
-
-      // mark presence inCall true
-      await setDoc(doc(db,'presence',currentUser.uid), { inCall: true }, { merge:true });
-
-      // listen for answer
-      onSnapshot(callRef, snap => {
-        const data = snap.data();
-        if(data && data.answer && pc && !pc.currentRemoteDescription){
-          pc.setRemoteDescription(new RTCSessionDescription(data.answer)).catch(e=>logDebug('setRemote failed',e));
-          callStatus.textContent = `In call (${callRef.id})`;
-          callInput.value = callRef.id;
-          hangupBtn.style.display='inline-block'; createCallBtn.style.display='none';
-        }
-      });
-
-      // listen for callee candidates
-      onSnapshot(calleeCandidatesCol, snapshot=>{
-        snapshot.docChanges().forEach(async change=>{
-          if(change.type==='added'){
-            const c = change.doc.data();
-            try { await pc.addIceCandidate(c); } catch(e){ console.warn('addIceCandidate',e); }
-          }
-        });
-      });
-
-      logDebug('call created', callRef.id);
-      return callRef.id;
-    }
-
-    createCallBtn.addEventListener('click', async ()=>{
-      // if user clicked a presence entry and its uid populated in dmSelect, use that as private callee
-      let calleeUid = null;
-      const target = dmSelect.value.trim().replace(/^@/, '');
-      if(target){
-        const presSnap = await getDocs(query(collection(db,'presence'), where('displayName','==',target)));
-        if(!presSnap.empty) calleeUid = presSnap.docs[0].id;
+      if(typeof remoteAudio.setSinkId !== 'function') {
+        logDebug('setSinkId not supported in this browser');
+        return;
       }
       try {
-        const id = await createCall(calleeUid);
-        // apply saved output (mobile browsers require user gesture)
-        const out = localStorage.getItem(SAVE_KEYS.output) || '';
-        if(out) applyOutputDevice(out);
-        logDebug('Created call id', id);
-      } catch(e){ alert('Create call failed: '+(e.message||e)); }
+        await remoteAudio.setSinkId(deviceId || '');
+        localStorage.setItem(SAVE_KEYS.output, deviceId || '');
+        logDebug('Output set to', deviceId || 'default');
+      } catch (e) {
+        console.warn('setSinkId failed', e);
+        logDebug('setSinkId failed: ' + (e.message || e));
+      }
+    }
+
+    // start or restart local audio with selected device
+    async function startLocalAudio() {
+      const selectedInput = inputSelect.value || localStorage.getItem(SAVE_KEYS.input) || '';
+      // build constraints
+      const audioConstraints = selectedInput ? { deviceId: { exact: selectedInput } } : true;
+      try {
+        const newStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+        // stop previous tracks
+        if(localStream) {
+          localStream.getTracks().forEach(t => t.stop());
+        }
+        localStream = newStream;
+        // if in a call and pc exists, replace audio track(s)
+        if(pc) {
+          const senders = pc.getSenders ? pc.getSenders() : [];
+          const newTrack = localStream.getAudioTracks()[0];
+          for(const sender of senders){
+            if(sender.track && sender.track.kind === 'audio') {
+              try { await sender.replaceTrack(newTrack); } catch(e){ console.warn('replaceTrack failed', e); }
+            }
+          }
+        }
+        // remember selected input
+        localStorage.setItem(SAVE_KEYS.input, selectedInput || '');
+        logDebug('Local audio started (device)', selectedInput || 'default');
+        return localStream;
+      } catch (e) {
+        console.error('startLocalAudio failed', e);
+        logDebug('startLocalAudio failed: ' + (e.message || e));
+        throw e;
+      }
+    }
+
+    // respond to select changes
+    inputSelect.addEventListener('change', async () => {
+      const id = inputSelect.value || '';
+      localStorage.setItem(SAVE_KEYS.input, id);
+      // restart local audio (and replace track in active pc if any)
+      try { await startLocalAudio(); } catch(e){ console.warn(e); }
+    });
+    outputSelect.addEventListener('change', async () => {
+      const id = outputSelect.value || '';
+      localStorage.setItem(SAVE_KEYS.output, id);
+      await applyOutputDevice(id);
     });
 
-    // join call: check participants constraint if present
-    joinCallBtn.addEventListener('click', async ()=>{
-      const callId = callInput.value.trim();
-      if(!callId){ alert('Enter call ID'); return; }
+    // update device lists when devices change (plug/unplug)
+    navigator.mediaDevices.addEventListener?.('devicechange', enumerateAndPopulateDevices);
+
+    // initialize devices: try to get permission to get labels if not present
+    async function initDevices() {
       try {
-        const callRef = doc(db,'calls',callId);
-        const snap = await getDoc(callRef);
-        if(!snap.exists()){ alert('Call not found'); return; }
-        const data = snap.data();
-        if(data.participants && !data.participants.includes(currentUser.uid)){ alert('You are not invited to this private call'); return; }
+        // If labels are empty, prompt for permission briefly to allow proper labels. Only do if necessary.
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const needPerm = devices.some(d => (d.kind === 'audioinput') && !d.label);
+        if(needPerm) {
+          try {
+            const tmpStream = await navigator.mediaDevices.getUserMedia({ audio:true });
+            tmpStream.getTracks().forEach(t => t.stop());
+          } catch (_) {
+            // user denied or not available — we'll still list devices, labels may be empty
+          }
+        }
+      } catch (e) {
+        console.warn('initDevices enumerate failed', e);
+      } finally {
+        await enumerateAndPopulateDevices();
+      }
+    }
+
+    // -----------------------
+    // WebRTC voice calling (simple Firestore signaling)
+    // -----------------------
+    const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+    createCallBtn.addEventListener('click', async () => {
+      if(!currentUser){ alert('Sign in first'); return; }
+      createCallBtn.disabled = true;
+      logDebug('Creating call…');
+      try {
         await startLocalAudio();
         pc = new RTCPeerConnection(rtcConfig);
-        localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
-        pc.ontrack = e => { remoteAudio.srcObject = e.streams[0]; remoteAudio.play().catch(()=>{}); };
-        pc.onicecandidate = e => { if(e.candidate) addDoc(collection(callRef,'calleeCandidates'), e.candidate.toJSON()).catch(()=>{}); };
 
-        callerCandidatesCol = collection(callRef,'callerCandidates');
-        calleeCandidatesCol = collection(callRef,'calleeCandidates');
+        // add local stream tracks
+        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
 
+        // remote track handling
+        pc.ontrack = (event) => {
+          logDebug('Remote track received');
+          remoteAudio.srcObject = event.streams[0];
+        };
+
+        // create call doc reference and subcollections AFTER pc exists
+        const callRef = doc(collection(db, 'calls'));
+        callDocRef = callRef;
+        callerCandidatesCol = collection(callRef, 'callerCandidates');
+        calleeCandidatesCol = collection(callRef, 'calleeCandidates');
+
+        // ICE candidates -> save to callerCandidates subcollection
+        pc.onicecandidate = (event) => {
+          if(event.candidate){
+            const c = event.candidate.toJSON();
+            if(callerCandidatesCol) addDoc(callerCandidatesCol, c).catch(e=>logDebug('ICE write err',e.message));
+          }
+        };
+
+        // create and persist offer
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        await setDoc(callRef, {
+          offer: { type: offer.type, sdp: offer.sdp },
+          createdBy: currentUser.uid,
+          createdAt: serverTimestamp()
+        });
+
+        // apply output device if previously selected
+        const savedOutput = localStorage.getItem(SAVE_KEYS.output) || outputSelect.value || '';
+        if(savedOutput) await applyOutputDevice(savedOutput);
+
+        // listen for answer on call doc
+        onSnapshot(callRef, async snap => {
+          const data = snap.data();
+          if(!pc.currentRemoteDescription && data && data.answer){
+            logDebug('Answer received, setting remote description');
+            const answer = new RTCSessionDescription(data.answer);
+            await pc.setRemoteDescription(answer);
+            callStatus.textContent = `In call (id: ${callRef.id})`;
+            callInput.value = callRef.id;
+            hangupBtn.style.display = 'inline-block';
+            createCallBtn.style.display = 'none';
+          }
+        });
+
+        // listen for callee ICE candidates
+        onSnapshot(calleeCandidatesCol, snapshot => {
+          snapshot.docChanges().forEach(async change => {
+            if(change.type === 'added'){
+              const c = change.doc.data();
+              try { await pc.addIceCandidate(c); } catch(e){ console.warn('addIceCandidate failed', e); }
+            }
+          });
+        });
+
+        logDebug('Call created with ID', callRef.id);
+        callStatus.textContent = `Waiting for answer (id: ${callRef.id})`;
+        callInput.value = callRef.id;
+      } catch (e){
+        console.error(e);
+        logDebug('Create call failed', e.message || e);
+        alert('Create call failed: ' + (e.message || e));
+      } finally {
+        createCallBtn.disabled = false;
+      }
+    });
+
+    joinCallBtn.addEventListener('click', async () => {
+      const callId = callInput.value.trim();
+      if(!callId){ alert('Enter call ID to join'); return; }
+      if(!currentUser){ alert('Sign in first'); return; }
+      joinCallBtn.disabled = true;
+      logDebug('Joining call', callId);
+      try {
+        const callRef = doc(db, 'calls', callId);
+        const callSnap = await getDoc(callRef);
+        if(!callSnap.exists()){
+          alert('Call not found');
+          joinCallBtn.disabled = false;
+          return;
+        }
+        await startLocalAudio();
+        pc = new RTCPeerConnection(rtcConfig);
+        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+        pc.ontrack = (event) => {
+          remoteAudio.srcObject = event.streams[0];
+        };
+        pc.onicecandidate = (event) => {
+          if(event.candidate){
+            const c = event.candidate.toJSON();
+            if(calleeCandidatesCol) addDoc(calleeCandidatesCol, c).catch(e=>logDebug('ICE write err',e.message));
+          }
+        };
+
+        callerCandidatesCol = collection(callRef, 'callerCandidates');
+        calleeCandidatesCol = collection(callRef, 'calleeCandidates');
+
+        // apply remote offer
+        const data = callSnap.data();
+        if(!data.offer){ throw new Error('Offer not found in call doc'); }
         await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         await updateDoc(callRef, { answer: { type: answer.type, sdp: answer.sdp } });
-        onSnapshot(callerCandidatesCol, snap=>{
-          snap.docChanges().forEach(async c => { if(c.type==='added'){ try { await pc.addIceCandidate(c.doc.data()); } catch(e){ console.warn(e); } } });
+
+        // listen for caller candidates to add
+        onSnapshot(callerCandidatesCol, snapshot => {
+          snapshot.docChanges().forEach(async change => {
+            if(change.type === 'added'){
+              const c = change.doc.data();
+              try { await pc.addIceCandidate(c); } catch(e){ console.warn('addIceCandidate failed', e); }
+            }
+          });
         });
-        hangupBtn.style.display='inline-block'; createCallBtn.style.display='none';
-        callStatus.textContent = `In call (${callId})`;
-        // mark presence inCall
-        await updateDoc(doc(db,'presence',currentUser.uid), { inCall: true });
-      } catch(e){ alert('Join failed: '+(e.message||e)); logDebug('join error', e.message||e); }
+
+        // set output device if saved
+        const savedOutput = localStorage.getItem(SAVE_KEYS.output) || outputSelect.value || '';
+        if(savedOutput) await applyOutputDevice(savedOutput);
+
+        hangupBtn.style.display = 'inline-block';
+        createCallBtn.style.display = 'none';
+        callStatus.textContent = `In call (id: ${callId})`;
+        logDebug('Joined call', callId);
+      } catch (e){
+        console.error(e);
+        logDebug('Join call failed', e.message || e);
+        alert('Join failed: ' + (e.message || e));
+      } finally {
+        joinCallBtn.disabled = false;
+      }
     });
 
-    // screen share
-    screenShareBtn.addEventListener('click', async ()=>{
-      if(!navigator.mediaDevices.getDisplayMedia){ alert('Screen sharing not supported here'); return; }
-      try {
-        const screenStream = await navigator.mediaDevices.getDisplayMedia({ video:true });
-        if(pc){
-          // add screen track as separate sender
-          const screenTrack = screenStream.getVideoTracks()[0];
-          pc.addTrack(screenTrack, screenStream);
-          screenTrack.onended = ()=> logDebug('screen share ended');
-          logDebug('Screen shared (added track)');
-        } else {
-          alert('Start or join a call first to share screen');
-        }
-      } catch(e){ console.warn('getDisplayMedia failed', e); alert('Screen share failed: ' + (e.message||e)); }
-    });
-
-    // mute toggle
-    muteBtn.addEventListener('click', ()=> {
+    // Mute/unmute local audio track
+    muteBtn.addEventListener('click', () => {
       if(!localStream) return;
       localAudioEnabled = !localAudioEnabled;
-      localStream.getAudioTracks().forEach(t=> t.enabled = localAudioEnabled);
+      localStream.getAudioTracks().forEach(t => t.enabled = localAudioEnabled);
       muteBtn.textContent = localAudioEnabled ? 'Mute' : 'Unmute';
     });
 
-    // hangup
-    hangupBtn.addEventListener('click', async ()=>{
+    // Hang up: close pc and optionally mark call doc ended
+    hangupBtn.addEventListener('click', async () => {
       try {
-        if(pc){ pc.close(); pc=null; }
-        if(localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; remoteAudio.srcObject=null; }
-        if(callDocRef) { try { await updateDoc(callDocRef, { endedAt: serverTimestamp() }); } catch(e){} callDocRef=null; }
-        // mark presence not in call
-        if(currentUser) setDoc(doc(db,'presence',currentUser.uid), { inCall: false }, { merge:true });
-        hangupBtn.style.display='none'; createCallBtn.style.display='inline-block';
-        callStatus.textContent='Not in call';
+        if(pc){ pc.close(); pc = null; }
+        if(localStream){ localStream.getTracks().forEach(t => t.stop()); localStream = null; remoteAudio.srcObject = null; }
+        if(callDocRef){
+          try { await updateDoc(callDocRef, { endedAt: serverTimestamp() }); } catch(e){}
+          callDocRef = null;
+        }
+        hangupBtn.style.display = 'none';
+        createCallBtn.style.display = 'inline-block';
+        callStatus.textContent = 'Not in call';
         logDebug('Call ended');
-      } catch(e){ console.warn('hangup', e); }
+      } catch(e){ console.warn('hangup error', e); }
     });
 
-    // save displayName changes
-    displayNameInput.addEventListener('change', ()=> {
-      displayName = displayNameInput.value.trim().slice(0,40);
-      localStorage.setItem('talkalot_displayName', displayName);
-      displayNameLabel.textContent = displayName || '(anonymous)';
-      if(currentUser) setDoc(doc(db,'presence',currentUser.uid), { displayName, lastSeen: serverTimestamp() }, { merge:true });
-    });
+    // Shortcuts: pressing Enter in callInput joins
+    callInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); joinCallBtn.click(); } });
 
-    // init: ensure output set if supported
-    (async ()=>{
-      try {
-        const out = localStorage.getItem(SAVE_KEYS.output) || '';
-        if(out && typeof remoteAudio.setSinkId === 'function') await remoteAudio.setSinkId(out);
-      } catch(e){ console.warn('initial setSinkId failed', e); }
-      logDebug('client ready');
+    // initialize device lists & try to get labels
+    initDevices().catch(()=>{ /* ignore */ });
+
+    // Apply saved output (if any) on load
+    (async () => {
+      const savedOutput = localStorage.getItem(SAVE_KEYS.output) || '';
+      if(savedOutput) {
+        // if setSinkId not supported, log only
+        if(typeof remoteAudio.setSinkId === 'function') {
+          try { await remoteAudio.setSinkId(savedOutput); } catch(e){ console.warn('setSinkId initial failed', e); }
+        }
+      }
+      logDebug('Client ready — project:', firebaseConfig.projectId);
+      messageInput.focus();
     })();
 
+    // End of module
   </script>
 </body>
 </html>
