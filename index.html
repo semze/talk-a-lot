@@ -71,6 +71,7 @@
 
         <div class="inputRow">
           <textarea id="messageInput" placeholder="Type a message (press Enter to send)"></textarea>
+          <input id="fileInput" type="file" accept="image/*" />
           <button id="sendBtn" class="primary">Send</button>
         </div>
 
@@ -88,6 +89,10 @@
         <div style="display:flex;gap:.6rem;align-items:center;margin-top:.4rem">
           <div style="width:12px;height:12px;border-radius:50%;background:#10b981"></div>
           <div class="hint" id="onlineCount">— online</div>
+        </div>
+        <div style="margin-top:.6rem">
+          <div class="small">Who's here</div>
+          <ul id="participantsList" class="hint" style="margin-top:.4rem;padding-left:1rem"></ul>
         </div>
       </div>
 
@@ -108,6 +113,7 @@
 
         <div style="display:flex;gap:.5rem">
           <button id="createCallBtn">Create Call</button>
+          <button id="joinGlobalBtn">Join Global Voice</button>
           <button id="hangupBtn" style="display:none">Hang up</button>
         </div>
 
@@ -158,6 +164,13 @@
       updateDoc
     } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
 
+    import {
+      getStorage,
+      ref as storageRef,
+      uploadBytes,
+      getDownloadURL
+    } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-storage.js";
+
     // ========================
     // CONFIG — keep your project's config
     const firebaseConfig = {
@@ -180,6 +193,7 @@
     const messagesEl = document.getElementById('messages');
     const messageInput = document.getElementById('messageInput');
     const sendBtn = document.getElementById('sendBtn');
+    const fileInput = document.getElementById('fileInput');
     const anonBtn = document.getElementById('anonSignIn');
     const signOutBtn = document.getElementById('signOut');
     const displayNameInput = document.getElementById('displayName');
@@ -261,7 +275,18 @@
 
       const bubble = document.createElement('div');
       bubble.className = 'bubble';
-      bubble.innerHTML = escapeHTML(msg.text);
+      // text message (optional)
+      if(msg.text) bubble.innerHTML = escapeHTML(msg.text);
+      // image (optional)
+      if(msg.imageUrl){
+        const img = document.createElement('img');
+        img.src = msg.imageUrl;
+        img.style.maxWidth = '360px';
+        img.style.borderRadius = '8px';
+        img.style.display = 'block';
+        img.style.marginTop = '8px';
+        bubble.appendChild(img);
+      }
 
       bubbleWrap.appendChild(meta);
       bubbleWrap.appendChild(bubble);
@@ -295,18 +320,35 @@
     // Send message
     async function sendMessage(){
       const text = messageInput.value.trim();
-      if(!text) return;
+      const file = fileInput && fileInput.files && fileInput.files[0];
+      if(!text && !file) return;
       if(!currentUser){ statusEl.textContent = 'Sign in to send messages'; return; }
-      if(text.length > 1500){ statusEl.textContent = 'Message too long'; return; }
+      if(text && text.length > 1500){ statusEl.textContent = 'Message too long'; return; }
       sendBtn.disabled = true;
       try {
+        let imageUrl = null;
+        if(file){
+          try {
+            const storage = getStorage(app);
+            const path = `chat_images/${currentUser.uid || 'anon'}_${Date.now()}_${file.name}`;
+            const sRef = storageRef(storage, path);
+            await uploadBytes(sRef, file);
+            imageUrl = await getDownloadURL(sRef);
+          } catch(e){
+            console.error('Image upload failed', e);
+            statusEl.textContent = 'Image upload failed';
+          }
+        }
+
         await addDoc(messagesCol, {
           uid: currentUser.uid,
           displayName: displayName || null,
-          text,
+          text: text || null,
+          imageUrl: imageUrl || null,
           createdAt: serverTimestamp()
         });
         messageInput.value = '';
+        if(fileInput) fileInput.value = '';
         statusEl.textContent = 'Sent';
       } catch(err){
         console.error(err);
