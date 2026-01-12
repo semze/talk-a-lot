@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>GitHub Pages Voice Chat (Firebase signaling)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 16px; }
+    #controls { margin-bottom: 12px; }
+    #peers { margin-top: 12px; }
+    .peer { margin: 6px 0; }
+    audio { display: block; margin-top: 6px; }
+    button { margin-left: 6px; }
+    #log { white-space: pre-wrap; background:#f7f7f7; padding:8px; border-radius:6px; max-height:200px; overflow:auto; }
+  </style>
+</head>
+<body>
+  <h1>Voice Chat (Firebase signaling)</h1>
+
+  <div id="controls">
+    <input id="room" placeholder="room name (e.g. myroom)" />
+    <button id="joinBtn">Join</button>
+    <button id="leaveBtn" disabled>Leave</button>
+    <div id="status"></div>
+  </div>
+
+  <div id="peers">
+    <h3>Peers</h3>
+    <div id="peerList"></div>
+  </div>
+
+  <h3>Debug log</h3>
+  <div id="log"></div>
+
+  <!-- Firebase (compat) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+
+  <!-- client code -->
+  <script src="client.js"></script>
+</body>
+</html>
