@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Talk-a-lot — Live Chat + Voice</title>
+  <title>Talk-a-lot — Live Chat</title>
   <style>
     :root{
       --bg:#f6f8fa; --card:#fff; --muted:#6b7280; --accent:#0366d6; --me:#e6f0ff;
@@ -42,6 +42,7 @@
     .hint{font-size:0.82rem;color:var(--muted)}
     select{padding:.45rem;border-radius:8px;border:1px solid #e6eef6;background:#fff}
     .device-row{display:flex;gap:.5rem;align-items:center}
+    .file-preview{max-width:240px;max-height:160px;border-radius:8px;display:block}
   </style>
 </head>
 <body>
@@ -72,6 +73,12 @@
         <div class="inputRow">
           <textarea id="messageInput" placeholder="Type a message (press Enter to send)"></textarea>
           <button id="sendBtn" class="primary">Send</button>
+        </div>
+
+        <!-- Image upload control (added) -->
+        <div style="display:flex;gap:.5rem;align-items:center;margin-top:.4rem">
+          <input id="imageInput" type="file" accept="image/*" />
+          <button id="uploadImageBtn">Upload & Send Image</button>
         </div>
 
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
@@ -135,7 +142,7 @@
   </div>
 
   <script type="module">
-    // Firebase + Firestore libs (modular) via CDN
+    // Firebase + Firestore + Storage libs (modular) via CDN
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
     import {
       getAuth,
@@ -157,6 +164,12 @@
       getDoc,
       updateDoc
     } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
+    import {
+      getStorage,
+      ref as storageRef,
+      uploadBytesResumable,
+      getDownloadURL
+    } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-storage.js";
 
     // ========================
     // CONFIG — keep your project's config
@@ -174,6 +187,7 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
+    const storage = getStorage(app);
 
     // UI refs
     const statusEl = document.getElementById('status');
@@ -201,6 +215,10 @@
     const muteBtn = document.getElementById('muteBtn');
     const callStatus = document.getElementById('callStatus');
     const remoteAudio = document.getElementById('remoteAudio');
+
+    // Image upload UI
+    const imageInput = document.getElementById('imageInput');
+    const uploadImageBtn = document.getElementById('uploadImageBtn');
 
     // Local state
     let currentUser = null;
@@ -261,7 +279,22 @@
 
       const bubble = document.createElement('div');
       bubble.className = 'bubble';
-      bubble.innerHTML = escapeHTML(msg.text);
+
+      if (msg.imageUrl) {
+        const img = document.createElement('img');
+        img.src = msg.imageUrl;
+        img.className = 'file-preview';
+        img.alt = msg.text || 'image';
+        bubble.appendChild(img);
+        if (msg.text) {
+          const caption = document.createElement('div');
+          caption.textContent = msg.text;
+          caption.style.marginTop = '.3rem';
+          bubble.appendChild(caption);
+        }
+      } else {
+        bubble.innerHTML = escapeHTML(msg.text || '');
+      }
 
       bubbleWrap.appendChild(meta);
       bubbleWrap.appendChild(bubble);
@@ -304,6 +337,7 @@
           uid: currentUser.uid,
           displayName: displayName || null,
           text,
+          imageUrl: null,
           createdAt: serverTimestamp()
         });
         messageInput.value = '';
@@ -389,7 +423,7 @@
     });
 
     // -----------------------
-    // Device selection & management
+    // Device selection & management (used by calls)
     // -----------------------
     async function enumerateAndPopulateDevices() {
       try {
@@ -400,7 +434,6 @@
         const savedIn = localStorage.getItem(SAVE_KEYS.input) || '';
         const savedOut = localStorage.getItem(SAVE_KEYS.output) || '';
 
-        // helper to set options
         function fill(selectEl, list, saved, kindLabel) {
           const prev = selectEl.value;
           selectEl.innerHTML = '';
@@ -411,7 +444,6 @@
           list.forEach(d=>{
             const option = document.createElement('option');
             option.value = d.deviceId;
-            // device labels may be empty until permission granted
             option.textContent = d.label || `${kindLabel} ${selectEl.length}`;
             selectEl.appendChild(option);
           });
@@ -422,7 +454,6 @@
         fill(inputSelect, inputs, savedIn, 'Mic');
         fill(outputSelect, outputs, savedOut, 'Speaker');
 
-        // if output saved set sink now
         const outId = outputSelect.value;
         if(outId) await applyOutputDevice(outId);
       } catch (e) {
@@ -430,7 +461,6 @@
       }
     }
 
-    // apply chosen output device to remoteAudio
     async function applyOutputDevice(deviceId) {
       if(!remoteAudio) return;
       if(typeof remoteAudio.setSinkId !== 'function') {
@@ -447,19 +477,15 @@
       }
     }
 
-    // start or restart local audio with selected device
     async function startLocalAudio() {
       const selectedInput = inputSelect.value || localStorage.getItem(SAVE_KEYS.input) || '';
-      // build constraints
       const audioConstraints = selectedInput ? { deviceId: { exact: selectedInput } } : true;
       try {
         const newStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
-        // stop previous tracks
         if(localStream) {
           localStream.getTracks().forEach(t => t.stop());
         }
         localStream = newStream;
-        // if in a call and pc exists, replace audio track(s)
         if(pc) {
           const senders = pc.getSenders ? pc.getSenders() : [];
           const newTrack = localStream.getAudioTracks()[0];
@@ -469,7 +495,6 @@
             }
           }
         }
-        // remember selected input
         localStorage.setItem(SAVE_KEYS.input, selectedInput || '');
         logDebug('Local audio started (device)', selectedInput || 'default');
         return localStream;
@@ -480,11 +505,9 @@
       }
     }
 
-    // respond to select changes
     inputSelect.addEventListener('change', async () => {
       const id = inputSelect.value || '';
       localStorage.setItem(SAVE_KEYS.input, id);
-      // restart local audio (and replace track in active pc if any)
       try { await startLocalAudio(); } catch(e){ console.warn(e); }
     });
     outputSelect.addEventListener('change', async () => {
@@ -493,32 +516,11 @@
       await applyOutputDevice(id);
     });
 
-    // update device lists when devices change (plug/unplug)
     navigator.mediaDevices.addEventListener?.('devicechange', enumerateAndPopulateDevices);
-
-    // initialize devices: try to get permission to get labels if not present
-    async function initDevices() {
-      try {
-        // If labels are empty, prompt for permission briefly to allow proper labels. Only do if necessary.
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const needPerm = devices.some(d => (d.kind === 'audioinput') && !d.label);
-        if(needPerm) {
-          try {
-            const tmpStream = await navigator.mediaDevices.getUserMedia({ audio:true });
-            tmpStream.getTracks().forEach(t => t.stop());
-          } catch (_) {
-            // user denied or not available — we'll still list devices, labels may be empty
-          }
-        }
-      } catch (e) {
-        console.warn('initDevices enumerate failed', e);
-      } finally {
-        await enumerateAndPopulateDevices();
-      }
-    }
+    (async ()=>{ try { await navigator.mediaDevices.getUserMedia({audio:true}); } catch(e){} finally{ enumerateAndPopulateDevices(); } })();
 
     // -----------------------
-    // WebRTC voice calling (simple Firestore signaling)
+    // WebRTC voice calling (simple Firestore signaling) — unchanged
     // -----------------------
     const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
@@ -530,22 +532,18 @@
         await startLocalAudio();
         pc = new RTCPeerConnection(rtcConfig);
 
-        // add local stream tracks
         localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
 
-        // remote track handling
         pc.ontrack = (event) => {
           logDebug('Remote track received');
           remoteAudio.srcObject = event.streams[0];
         };
 
-        // create call doc reference and subcollections AFTER pc exists
         const callRef = doc(collection(db, 'calls'));
         callDocRef = callRef;
         callerCandidatesCol = collection(callRef, 'callerCandidates');
         calleeCandidatesCol = collection(callRef, 'calleeCandidates');
 
-        // ICE candidates -> save to callerCandidates subcollection
         pc.onicecandidate = (event) => {
           if(event.candidate){
             const c = event.candidate.toJSON();
@@ -553,7 +551,6 @@
           }
         };
 
-        // create and persist offer
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
 
@@ -563,11 +560,9 @@
           createdAt: serverTimestamp()
         });
 
-        // apply output device if previously selected
         const savedOutput = localStorage.getItem(SAVE_KEYS.output) || outputSelect.value || '';
         if(savedOutput) await applyOutputDevice(savedOutput);
 
-        // listen for answer on call doc
         onSnapshot(callRef, async snap => {
           const data = snap.data();
           if(!pc.currentRemoteDescription && data && data.answer){
@@ -581,7 +576,6 @@
           }
         });
 
-        // listen for callee ICE candidates
         onSnapshot(calleeCandidatesCol, snapshot => {
           snapshot.docChanges().forEach(async change => {
             if(change.type === 'added'){
@@ -633,7 +627,6 @@
         callerCandidatesCol = collection(callRef, 'callerCandidates');
         calleeCandidatesCol = collection(callRef, 'calleeCandidates');
 
-        // apply remote offer
         const data = callSnap.data();
         if(!data.offer){ throw new Error('Offer not found in call doc'); }
         await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
@@ -642,7 +635,6 @@
         await pc.setLocalDescription(answer);
         await updateDoc(callRef, { answer: { type: answer.type, sdp: answer.sdp } });
 
-        // listen for caller candidates to add
         onSnapshot(callerCandidatesCol, snapshot => {
           snapshot.docChanges().forEach(async change => {
             if(change.type === 'added'){
@@ -652,7 +644,6 @@
           });
         });
 
-        // set output device if saved
         const savedOutput = localStorage.getItem(SAVE_KEYS.output) || outputSelect.value || '';
         if(savedOutput) await applyOutputDevice(savedOutput);
 
@@ -696,14 +687,103 @@
     // Shortcuts: pressing Enter in callInput joins
     callInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); joinCallBtn.click(); } });
 
-    // initialize device lists & try to get labels
-    initDevices().catch(()=>{ /* ignore */ });
+    // -----------------------
+    // Image upload & paste handling (ADDED)
+    // -----------------------
+    async function uploadImageFile(file) {
+      if(!currentUser) throw new Error('Sign in to upload images');
+      const fileName = `${currentUser.uid}_${Date.now()}_${file.name.replace(/\s+/g,'_')}`;
+      const path = `chat_images/${currentUser.uid}/${fileName}`;
+      const ref = storageRef(storage, path);
+      const uploadTask = uploadBytesResumable(ref, file);
+      return await new Promise((resolve, reject) => {
+        uploadTask.on('state_changed', ()=>{}, reject, async ()=>{
+          try {
+            const url = await getDownloadURL(ref);
+            resolve(url);
+          } catch (e) { reject(e); }
+        });
+      });
+    }
+
+    // upload button
+    uploadImageBtn.addEventListener('click', async () => {
+      const file = imageInput.files[0];
+      if(!file){ alert('Select an image first'); return; }
+      uploadImageBtn.disabled = true;
+      try {
+        const url = await uploadImageFile(file);
+        await addDoc(messagesCol, {
+          uid: currentUser.uid,
+          displayName: displayName || null,
+          text: '',
+          imageUrl: url,
+          createdAt: serverTimestamp()
+        });
+        imageInput.value = '';
+        statusEl.textContent = 'Image sent';
+      } catch (e) {
+        console.error('Image upload failed', e);
+        statusEl.textContent = 'Image upload failed: ' + (e.message || e);
+      } finally {
+        uploadImageBtn.disabled = false;
+      }
+    });
+
+    // paste into textarea
+    messageInput.addEventListener('paste', async (e) => {
+      try {
+        const items = e.clipboardData && e.clipboardData.items;
+        if(!items) return;
+        for (const item of items) {
+          if (item.kind === 'file' && item.type.startsWith('image/')) {
+            e.preventDefault(); // avoid inserting blob URL into textarea
+            const file = item.getAsFile();
+            if(!file) continue;
+            statusEl.textContent = 'Uploading image...';
+            const url = await uploadImageFile(file);
+            await addDoc(messagesCol, {
+              uid: currentUser.uid,
+              displayName: displayName || null,
+              text: '',
+              imageUrl: url,
+              createdAt: serverTimestamp()
+            });
+            statusEl.textContent = 'Image sent (pasted)';
+            break; // handle only first image for now
+          }
+        }
+      } catch (err) {
+        console.error('Paste upload error', err);
+        statusEl.textContent = 'Paste upload failed: ' + (err.message || err);
+      }
+    });
+
+    // initialize devices: try to get permission to get labels if not present
+    async function initDevices() {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const needPerm = devices.some(d => (d.kind === 'audioinput') && !d.label);
+        if(needPerm) {
+          try {
+            const tmpStream = await navigator.mediaDevices.getUserMedia({ audio:true });
+            tmpStream.getTracks().forEach(t => t.stop());
+          } catch (_) {}
+        }
+      } catch (e) {
+        console.warn('initDevices enumerate failed', e);
+      } finally {
+        await enumerateAndPopulateDevices();
+      }
+    }
+
+    // initialize devices
+    initDevices().catch(()=>{});
 
     // Apply saved output (if any) on load
     (async () => {
       const savedOutput = localStorage.getItem(SAVE_KEYS.output) || '';
       if(savedOutput) {
-        // if setSinkId not supported, log only
         if(typeof remoteAudio.setSinkId === 'function') {
           try { await remoteAudio.setSinkId(savedOutput); } catch(e){ console.warn('setSinkId initial failed', e); }
         }
