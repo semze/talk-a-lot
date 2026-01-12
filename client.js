@@ -3,13 +3,13 @@
 
 ///// Firebase config - replace with your project's config /////
 const firebaseConfig = {
-  apiKey: "REPLACE_WITH_YOUR_API_KEY",
-  authDomain: "REPLACE_WITH_YOUR_PROJECT.firebaseapp.com",
-  databaseURL: "https://REPLACE_WITH_YOUR_PROJECT.firebaseio.com",
-  projectId: "REPLACE_WITH_YOUR_PROJECT",
-  storageBucket: "REPLACE_WITH_YOUR_PROJECT.appspot.com",
-  messagingSenderId: "SENDER_ID",
-  appId: "APP_ID"
+  apiKey: "AIzaSyD2Q2TDCQDVcmmhR7zzVVTMtBkaS40cOx0",
+  authDomain: "talk-a-lot-5aad8.firebaseapp.com",
+  projectId: "talk-a-lot-5aad8",
+  storageBucket: "talk-a-lot-5aad8.firebasestorage.app",
+  messagingSenderId: "373420699612",
+  appId: "1:373420699612:web:11f4470e6e0097b6576919",
+  measurementId: "G-P0VNPFJ2HD"
 };
 /////////////////////////////////////////////////////////////////////
 
